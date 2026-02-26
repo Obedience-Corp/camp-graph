@@ -30,6 +30,7 @@ default:
     @just --list --unsorted
 
 # Build camp-graph binary
+[no-cd]
 build:
     @echo "Building camp-graph..."
     @mkdir -p {{bin_dir}}
@@ -37,29 +38,35 @@ build:
     @echo "Built {{bin_dir}}/{{binary_name}}"
 
 # Format Go code
+[no-cd]
 fmt:
     go fmt ./...
 
 # Run go vet
+[no-cd]
 vet:
     go vet ./...
 
 # Run formatting and vetting
+[no-cd]
 lint: fmt vet
     @echo "Linting complete"
 
 # Clean build artifacts
+[no-cd]
 clean:
     rm -rf {{bin_dir}}
     rm -f coverage.out coverage.html
     @echo "Cleaned build artifacts"
 
 # Update and tidy dependencies
+[no-cd]
 deps:
     go get -u ./...
     go mod tidy
 
 # Tidy dependencies
+[no-cd]
 tidy:
     go mod tidy
 

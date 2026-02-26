@@ -1,6 +1,9 @@
 package graph
 
 // Graph holds the in-memory knowledge graph of campaign artifacts.
+// A Graph is not safe for concurrent use. Callers that share a Graph
+// across goroutines (e.g., a background scanner and a TUI renderer)
+// must synchronize access with a mutex or channel-based ownership.
 type Graph struct {
 	nodes map[string]*Node
 	edges []*Edge
@@ -14,8 +17,13 @@ func New() *Graph {
 }
 
 // AddNode inserts a node into the graph.
-func (g *Graph) AddNode(n *Node) {
+// Returns true if a node with the same ID already existed and was replaced.
+// The new node is always stored regardless — callers may log or handle
+// duplicate IDs as appropriate for their use case.
+func (g *Graph) AddNode(n *Node) bool {
+	_, existed := g.nodes[n.ID]
 	g.nodes[n.ID] = n
+	return existed
 }
 
 // AddEdge inserts a directed edge between two nodes.
@@ -39,7 +47,9 @@ func (g *Graph) Nodes() []*Node {
 
 // Edges returns all edges in the graph.
 func (g *Graph) Edges() []*Edge {
-	return g.edges
+	out := make([]*Edge, len(g.edges))
+	copy(out, g.edges)
+	return out
 }
 
 // NodeCount returns the number of nodes in the graph.

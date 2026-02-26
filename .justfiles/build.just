@@ -1,7 +1,8 @@
 # Build recipes
+# SYNC: must match root justfile
 binary_name := "camp-graph"
-main_path := "./cmd/camp-graph"
 bin_dir := "bin"
+main_path := "./cmd/camp-graph"
 
 # Show available build commands
 [private]
