@@ -1,0 +1,15 @@
+# Binaries (all should go in bin/)
+bin/*
+
+# Test coverage files
+coverage.out
+**/coverage.out
+**/*.coverprofile
+
+.gocache/
+
+# Go workspace (local development only)
+go.work
+go.work.sum
+
+CLAUDE.md
