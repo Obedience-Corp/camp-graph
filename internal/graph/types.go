@@ -76,3 +76,33 @@ type Edge struct {
 	Note       string           `json:"note,omitempty"`
 	CreatedAt  time.Time        `json:"created_at"`
 }
+
+// NewNode creates a Node with initialized metadata and timestamps.
+// Always prefer NewNode over struct literals to avoid nil Metadata panics
+// and zero-value CreatedAt/UpdatedAt in JSON output.
+func NewNode(id string, nodeType NodeType, name, path string) *Node {
+	now := time.Now()
+	return &Node{
+		ID:        id,
+		Type:      nodeType,
+		Name:      name,
+		Path:      path,
+		Metadata:  make(map[string]string),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+// NewEdge creates an Edge with the creation timestamp set.
+// Always prefer NewEdge over struct literals to avoid zero-value CreatedAt
+// in JSON output.
+func NewEdge(fromID, toID string, edgeType EdgeType, confidence float64, source ConfidenceSource) *Edge {
+	return &Edge{
+		FromID:     fromID,
+		ToID:       toID,
+		Type:       edgeType,
+		Confidence: confidence,
+		Source:     source,
+		CreatedAt:  time.Now(),
+	}
+}
