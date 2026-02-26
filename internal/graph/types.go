@@ -30,18 +30,18 @@ const (
 type EdgeType string
 
 const (
-	EdgeContains    EdgeType = "contains"
-	EdgeChainMember EdgeType = "chain_member"
-	EdgeDependsOn   EdgeType = "depends_on"
-	EdgeLinksTo     EdgeType = "links_to"
-	EdgeRelatesTo   EdgeType = "relates_to"
+	EdgeContains     EdgeType = "contains"
+	EdgeChainMember  EdgeType = "chain_member"
+	EdgeDependsOn    EdgeType = "depends_on"
+	EdgeLinksTo      EdgeType = "links_to"
+	EdgeRelatesTo    EdgeType = "relates_to"
 	EdgeGatheredFrom EdgeType = "gathered_from"
-	EdgeReferences  EdgeType = "references"
-	EdgeSimilarTo   EdgeType = "similar_to"
-	EdgeDefines     EdgeType = "defines"
-	EdgeCalls       EdgeType = "calls"
-	EdgeImports     EdgeType = "imports"
-	EdgeModifies    EdgeType = "modifies"
+	EdgeReferences   EdgeType = "references"
+	EdgeSimilarTo    EdgeType = "similar_to"
+	EdgeDefines      EdgeType = "defines"
+	EdgeCalls        EdgeType = "calls"
+	EdgeImports      EdgeType = "imports"
+	EdgeModifies     EdgeType = "modifies"
 )
 
 // ConfidenceSource indicates how an edge was discovered.
