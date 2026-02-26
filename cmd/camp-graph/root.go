@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -8,13 +9,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	verbose bool
+// configKey is the unexported type used as the context key for Config values.
+type configKey struct{}
 
-	rootCmd = &cobra.Command{
-		Use:   "camp-graph",
-		Short: "Knowledge graph visualization for campaigns",
-		Long: `camp-graph builds and visualizes knowledge graphs from campaign artifacts.
+// Config holds the runtime configuration for camp-graph commands.
+// It is populated from flags in init() and stored in the cobra context
+// so all subcommands can access it without reading global state.
+type Config struct {
+	// Verbose enables detailed output when true.
+	Verbose bool
+
+	// CampRoot is the resolved campaign root directory for this invocation.
+	CampRoot string
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "camp-graph",
+	Short: "Knowledge graph visualization for campaigns",
+	Long: `camp-graph builds and visualizes knowledge graphs from campaign artifacts.
 
 It discovers relationships between projects, festivals, intents, design docs,
 chains, and code to provide a unified view of your campaign.
@@ -23,13 +35,24 @@ When installed on PATH, camp discovers it automatically:
   camp graph build
   camp graph browse
   camp graph query "auth"`,
-		SilenceUsage:  true,
-		SilenceErrors: true,
-	}
-)
+	SilenceUsage:  true,
+	SilenceErrors: true,
+}
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable verbose output")
+	cfg := &Config{}
+
+	rootCmd.PersistentFlags().BoolVar(&cfg.Verbose, "verbose", false, "enable verbose output")
+
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		root, err := getCampRoot()
+		if err != nil {
+			return fmt.Errorf("determining campaign root: %w", err)
+		}
+		cfg.CampRoot = root
+		cmd.SetContext(context.WithValue(cmd.Context(), configKey{}, cfg))
+		return nil
+	}
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(buildCmd)
@@ -38,26 +61,14 @@ func init() {
 
 // Execute runs the root command.
 func Execute() error {
-	// Read campaign context from environment (set by camp plugin discovery).
-	campRoot := os.Getenv("CAMP_ROOT")
-	if campRoot == "" {
-		// If not invoked via camp, try to detect campaign root.
-		cwd, err := os.Getwd()
-		if err == nil {
-			campRoot = cwd
-		}
-	}
-	_ = campRoot // used by subcommands via getCampRoot()
-
 	return rootCmd.Execute()
 }
 
-func getCampRoot() string {
+func getCampRoot() (string, error) {
 	if root := os.Getenv("CAMP_ROOT"); root != "" {
-		return root
+		return root, nil
 	}
-	cwd, _ := os.Getwd()
-	return cwd
+	return os.Getwd()
 }
 
 var versionCmd = &cobra.Command{
@@ -74,8 +85,11 @@ var buildCmd = &cobra.Command{
 	Short: "Build knowledge graph from campaign filesystem",
 	Long:  "Scan the campaign directory and build a knowledge graph of all artifacts and their relationships.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root := getCampRoot()
-		fmt.Printf("Building graph from: %s\n", root)
+		cfg := cmd.Context().Value(configKey{}).(*Config)
+		fmt.Printf("Building graph from: %s\n", cfg.CampRoot)
+		if cfg.Verbose {
+			fmt.Println("verbose output enabled")
+		}
 		fmt.Println("(not yet implemented)")
 		return nil
 	},
