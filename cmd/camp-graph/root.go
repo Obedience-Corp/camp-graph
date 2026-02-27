@@ -65,7 +65,8 @@ func init() {
 
 	buildCmd.Flags().StringVar(&outputPath, "output", "", "override database output path")
 	queryCmd.Flags().StringVar(&queryType, "type", "", "filter by node type (project, festival, intent, etc.)")
-	contextCmd.Flags().IntVar(&contextHops, "hops", 1, "number of hops from center node")
+	contextCmd.Flags().IntVar(&contextHops, "hops", 2, "neighborhood depth")
+	contextCmd.Flags().BoolVar(&contextDot, "dot", false, "output micrograph as DOT format")
 
 	browseCmd.Flags().StringVar(&browsePath, "db", "", "path to graph database")
 	renderCmd.Flags().StringVarP(&renderOutput, "output", "o", "", "write DOT output to file instead of stdout")
@@ -85,6 +86,7 @@ var (
 	outputPath   string
 	queryType    string
 	contextHops  int
+	contextDot   bool
 	browsePath   string
 	renderOutput string
 	renderNode   string
@@ -226,9 +228,9 @@ var queryCmd = &cobra.Command{
 }
 
 var contextCmd = &cobra.Command{
-	Use:   "context <id>",
-	Short: "Show relationships for an artifact (micrograph view)",
-	Long:  "Display the neighborhood of a node — all directly related artifacts grouped by relationship type.",
+	Use:   "context <id-or-name>",
+	Short: "Show artifact context (micrograph neighborhood view)",
+	Long:  "Display the knowledge graph neighborhood around a specific artifact, showing all related nodes within hop range.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -246,55 +248,74 @@ var contextCmd = &cobra.Command{
 			return fmt.Errorf("load graph: %w", err)
 		}
 
-		nodeID := args[0]
-		center := g.Node(nodeID)
-		if center == nil {
-			return fmt.Errorf("node %q not found (use 'camp-graph query' to search)", nodeID)
+		target := resolveNode(g, args[0])
+		if target == nil {
+			return fmt.Errorf("node %q not found\nTry: camp-graph query %s", args[0], args[0])
 		}
 
-		tag := strings.ToUpper(string(center.Type)[:3])
-		fmt.Printf("\n  [%s] %s - %s", tag, center.ID, center.Name)
-		if center.Status != "" {
-			fmt.Printf(" (%s)", center.Status)
-		}
-		fmt.Printf("\n  Path: %s\n", center.Path)
+		sub := g.Subgraph(target.ID, contextHops)
 
-		sub := g.Subgraph(nodeID, contextHops)
-
-		fmt.Println("\n  Relationships:")
-		outgoing := g.EdgesFrom(nodeID)
-		edgeGroups := make(map[graph.EdgeType][]*graph.Edge)
-		for _, e := range outgoing {
-			edgeGroups[e.Type] = append(edgeGroups[e.Type], e)
-		}
-		for edgeType, edges := range edgeGroups {
-			fmt.Printf("    %s ──►\n", edgeType)
-			for _, e := range edges {
-				if n := sub.Node(e.ToID); n != nil {
-					ntag := strings.ToUpper(string(n.Type)[:3])
-					fmt.Printf("      [%s] %s\n", ntag, n.ID)
-				}
-			}
+		if contextDot {
+			return render.RenderDOT(os.Stdout, sub)
 		}
 
-		incoming := g.EdgesTo(nodeID)
-		inGroups := make(map[graph.EdgeType][]*graph.Edge)
-		for _, e := range incoming {
-			inGroups[e.Type] = append(inGroups[e.Type], e)
-		}
-		for edgeType, edges := range inGroups {
-			fmt.Printf("    %s ◄──\n", edgeType)
-			for _, e := range edges {
-				if n := sub.Node(e.FromID); n != nil {
-					ntag := strings.ToUpper(string(n.Type)[:3])
-					fmt.Printf("      [%s] %s\n", ntag, n.ID)
-				}
-			}
-		}
-
-		fmt.Println()
+		printMicrograph(os.Stdout, g, target, sub, contextHops)
 		return nil
 	},
+}
+
+// resolveNode finds a node by exact ID or fuzzy name match.
+func resolveNode(g *graph.Graph, query string) *graph.Node {
+	if n := g.Node(query); n != nil {
+		return n
+	}
+	lower := strings.ToLower(query)
+	var matches []*graph.Node
+	for _, n := range g.Nodes() {
+		if strings.Contains(strings.ToLower(n.Name), lower) {
+			matches = append(matches, n)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	return nil
+}
+
+// printMicrograph outputs a formatted neighborhood view.
+func printMicrograph(w io.Writer, full *graph.Graph, target *graph.Node, sub *graph.Graph, hops int) {
+	fmt.Fprintf(w, "\n=== %s ===\n", target.Name)
+	fmt.Fprintf(w, "Type:   %s\n", target.Type)
+	fmt.Fprintf(w, "Path:   %s\n", target.Path)
+	if target.Status != "" {
+		fmt.Fprintf(w, "Status: %s\n", target.Status)
+	}
+	fmt.Fprintln(w)
+
+	outgoing := full.EdgesFrom(target.ID)
+	if len(outgoing) > 0 {
+		fmt.Fprintln(w, "Outgoing:")
+		for _, e := range outgoing {
+			if n := full.Node(e.ToID); n != nil {
+				fmt.Fprintf(w, "  → %s [%s] (%s)\n", n.Name, e.Type, n.Type)
+			}
+		}
+		fmt.Fprintln(w)
+	}
+
+	incoming := full.EdgesTo(target.ID)
+	if len(incoming) > 0 {
+		fmt.Fprintln(w, "Incoming:")
+		for _, e := range incoming {
+			if n := full.Node(e.FromID); n != nil {
+				fmt.Fprintf(w, "  ← %s [%s] (%s)\n", n.Name, e.Type, n.Type)
+			}
+		}
+		fmt.Fprintln(w)
+	}
+
+	fmt.Fprintf(w, "Neighborhood: %d nodes, %d edges (%d hops)\n\n",
+		sub.NodeCount(), sub.EdgeCount(), hops)
 }
 
 var browseCmd = &cobra.Command{

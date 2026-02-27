@@ -12,31 +12,50 @@ import (
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 )
 
+type viewMode int
+
+const (
+	modeList viewMode = iota
+	modeMicrograph
+)
+
 // Styles for node type coloring.
 var (
-	projectStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))  // cyan
-	festivalStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("13"))  // magenta
-	phaseStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))  // yellow
-	sequenceStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))  // green
-	taskStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))  // white
-	intentStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))  // blue
-	designDocStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))   // red
-	defaultStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245")) // gray
-	cursorStyle     = lipgloss.NewStyle().Bold(true).Reverse(true)
-	titleStyle      = lipgloss.NewStyle().Bold(true).Underline(true)
+	projectStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))  // cyan
+	festivalStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("13"))  // magenta
+	phaseStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))  // yellow
+	sequenceStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))  // green
+	taskStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))  // white
+	intentStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))  // blue
+	designDocStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))   // red
+	defaultStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245")) // gray
+	cursorStyle      = lipgloss.NewStyle().Bold(true).Reverse(true)
+	titleStyle       = lipgloss.NewStyle().Bold(true).Underline(true)
 	detailLabelStyle = lipgloss.NewStyle().Bold(true)
+	breadcrumbStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true)
 )
+
+type neighborEntry struct {
+	node      *graph.Node
+	edge      *graph.Edge
+	direction string
+}
 
 // Model is the BubbleTea model for the graph browser.
 type Model struct {
-	graph     *graph.Graph
-	nodes     []*graph.Node
-	filtered  []*graph.Node
-	cursor    int
-	search    textinput.Model
-	searching bool
-	width     int
-	height    int
+	graph       *graph.Graph
+	nodes       []*graph.Node
+	filtered    []*graph.Node
+	cursor      int
+	search      textinput.Model
+	searching   bool
+	width       int
+	height      int
+	mode        viewMode
+	focusNode   *graph.Node
+	neighbors   []*neighborEntry
+	microCursor int
+	history     []*graph.Node
 }
 
 // New creates a new TUI model from a populated graph.
@@ -71,6 +90,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.searching {
 			return m.updateSearch(msg)
 		}
+		if m.mode == modeMicrograph {
+			return m.updateMicrograph(msg)
+		}
 		return m.updateNormal(msg)
 	}
 
@@ -93,8 +115,63 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searching = true
 		m.search.Focus()
 		return m, m.search.Cursor.BlinkCmd()
+	case "enter":
+		if len(m.filtered) > 0 {
+			m.enterMicrograph(m.filtered[m.cursor])
+		}
 	}
 	return m, nil
+}
+
+func (m Model) updateMicrograph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "up", "k":
+		if m.microCursor > 0 {
+			m.microCursor--
+		}
+	case "down", "j":
+		if m.microCursor < len(m.neighbors)-1 {
+			m.microCursor++
+		}
+	case "enter":
+		if len(m.neighbors) > 0 {
+			m.history = append(m.history, m.focusNode)
+			m.enterMicrograph(m.neighbors[m.microCursor].node)
+		}
+	case "esc":
+		if len(m.history) > 0 {
+			prev := m.history[len(m.history)-1]
+			m.history = m.history[:len(m.history)-1]
+			m.enterMicrograph(prev)
+		} else {
+			m.mode = modeList
+		}
+	}
+	return m, nil
+}
+
+func (m *Model) enterMicrograph(n *graph.Node) {
+	m.mode = modeMicrograph
+	m.focusNode = n
+	m.microCursor = 0
+	m.neighbors = nil
+
+	for _, e := range m.graph.EdgesFrom(n.ID) {
+		if neighbor := m.graph.Node(e.ToID); neighbor != nil {
+			m.neighbors = append(m.neighbors, &neighborEntry{
+				node: neighbor, edge: e, direction: "→",
+			})
+		}
+	}
+	for _, e := range m.graph.EdgesTo(n.ID) {
+		if neighbor := m.graph.Node(e.FromID); neighbor != nil {
+			m.neighbors = append(m.neighbors, &neighborEntry{
+				node: neighbor, edge: e, direction: "←",
+			})
+		}
+	}
 }
 
 func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -143,6 +220,10 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	if m.mode == modeMicrograph {
+		return m.viewMicrograph()
+	}
+
 	listWidth := m.width / 2
 	detailWidth := m.width - listWidth - 1
 
@@ -152,6 +233,56 @@ func (m Model) View() string {
 	divider := strings.Repeat("│\n", max(1, m.height-2))
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, divider, detail)
+}
+
+func (m Model) viewMicrograph() string {
+	var b strings.Builder
+
+	// Breadcrumb
+	var crumbs []string
+	for _, h := range m.history {
+		crumbs = append(crumbs, h.Name)
+	}
+	crumbs = append(crumbs, m.focusNode.Name)
+	b.WriteString(breadcrumbStyle.Render(strings.Join(crumbs, " > ")) + "\n\n")
+
+	// Focus node details
+	b.WriteString(titleStyle.Render(m.focusNode.Name) + "\n")
+	b.WriteString(detailLabelStyle.Render("Type:   ") + string(m.focusNode.Type) + "\n")
+	b.WriteString(detailLabelStyle.Render("Path:   ") + m.focusNode.Path + "\n")
+	if m.focusNode.Status != "" {
+		b.WriteString(detailLabelStyle.Render("Status: ") + m.focusNode.Status + "\n")
+	}
+	b.WriteString("\n")
+
+	// Neighbor list
+	if len(m.neighbors) == 0 {
+		b.WriteString(defaultStyle.Render("No neighbors") + "\n")
+	} else {
+		b.WriteString(detailLabelStyle.Render(fmt.Sprintf("Neighbors (%d):", len(m.neighbors))) + "\n\n")
+
+		visibleLines := max(1, m.height-10)
+		start := 0
+		if m.microCursor >= visibleLines {
+			start = m.microCursor - visibleLines + 1
+		}
+
+		for i := start; i < len(m.neighbors) && i < start+visibleLines; i++ {
+			ne := m.neighbors[i]
+			line := fmt.Sprintf("%s %s [%s] (%s)", ne.direction, ne.node.Name, ne.edge.Type, ne.node.Type)
+
+			styled := styleForType(ne.node.Type).Render(line)
+			if i == m.microCursor {
+				styled = cursorStyle.Render(line)
+			}
+
+			b.WriteString("  " + styled + "\n")
+		}
+	}
+
+	b.WriteString("\n" + defaultStyle.Render("enter: focus  esc: back  q: quit"))
+
+	return lipgloss.NewStyle().Width(m.width).Render(b.String())
 }
 
 func (m Model) renderList(width int) string {
@@ -234,7 +365,7 @@ func (m Model) renderDetail(width int) string {
 		}
 	}
 
-	b.WriteString("\n" + defaultStyle.Render("↑↓/jk: navigate  /: search  q: quit"))
+	b.WriteString("\n" + defaultStyle.Render("enter: micrograph  ↑↓/jk: navigate  /: search  q: quit"))
 
 	return lipgloss.NewStyle().Width(width).Render(b.String())
 }
