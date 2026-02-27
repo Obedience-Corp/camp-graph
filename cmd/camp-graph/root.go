@@ -7,8 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
+	"github.com/Obedience-Corp/camp-graph/internal/tui"
 	"github.com/Obedience-Corp/camp-graph/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -62,16 +65,20 @@ func init() {
 	queryCmd.Flags().StringVar(&queryType, "type", "", "filter by node type (project, festival, intent, etc.)")
 	contextCmd.Flags().IntVar(&contextHops, "hops", 1, "number of hops from center node")
 
+	browseCmd.Flags().StringVar(&browsePath, "db", "", "path to graph database")
+
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(queryCmd)
 	rootCmd.AddCommand(contextCmd)
+	rootCmd.AddCommand(browseCmd)
 }
 
 var (
 	outputPath  string
 	queryType   string
 	contextHops int
+	browsePath  string
 )
 
 // Execute runs the root command.
@@ -276,5 +283,40 @@ var contextCmd = &cobra.Command{
 
 		fmt.Println()
 		return nil
+	},
+}
+
+var browseCmd = &cobra.Command{
+	Use:   "browse",
+	Short: "Interactive graph browser (TUI)",
+	Long:  "Launch an interactive terminal browser to explore the knowledge graph.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		cfg := ctx.Value(configKey{}).(*Config)
+
+		dbPath := browsePath
+		if dbPath == "" {
+			dbPath = filepath.Join(cfg.CampRoot, ".campaign", "graph.db")
+		}
+
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+			return fmt.Errorf("graph database not found at %s\nRun 'camp-graph build' first to create it", dbPath)
+		}
+
+		store, err := graph.OpenStore(ctx, dbPath)
+		if err != nil {
+			return fmt.Errorf("open graph database: %w", err)
+		}
+		defer store.Close()
+
+		g, err := graph.LoadGraph(ctx, store)
+		if err != nil {
+			return fmt.Errorf("load graph: %w", err)
+		}
+
+		model := tui.New(g)
+		p := tea.NewProgram(model, tea.WithAltScreen())
+		_, err = p.Run()
+		return err
 	},
 }
