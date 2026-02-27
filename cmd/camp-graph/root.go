@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
@@ -58,13 +59,20 @@ func init() {
 	}
 
 	buildCmd.Flags().StringVar(&outputPath, "output", "", "override database output path")
+	queryCmd.Flags().StringVar(&queryType, "type", "", "filter by node type (project, festival, intent, etc.)")
+	contextCmd.Flags().IntVar(&contextHops, "hops", 1, "number of hops from center node")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(queryCmd)
+	rootCmd.AddCommand(contextCmd)
 }
 
-var outputPath string
+var (
+	outputPath  string
+	queryType   string
+	contextHops int
+)
 
 // Execute runs the root command.
 func Execute() error {
@@ -154,8 +162,119 @@ var queryCmd = &cobra.Command{
 	Short: "Search across all graph nodes",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("Querying graph for: %s\n", args[0])
-		fmt.Println("(not yet implemented)")
+		ctx := cmd.Context()
+		cfg := ctx.Value(configKey{}).(*Config)
+		dbPath := filepath.Join(cfg.CampRoot, ".campaign", "graph.db")
+
+		store, err := graph.OpenStore(ctx, dbPath)
+		if err != nil {
+			return fmt.Errorf("open store (run 'camp-graph build' first): %w", err)
+		}
+		defer store.Close()
+
+		g, err := graph.LoadGraph(ctx, store)
+		if err != nil {
+			return fmt.Errorf("load graph: %w", err)
+		}
+
+		term := strings.ToLower(args[0])
+		var matches []*graph.Node
+		for _, n := range g.Nodes() {
+			if queryType != "" && string(n.Type) != queryType {
+				continue
+			}
+			if strings.Contains(strings.ToLower(n.Name), term) ||
+				strings.Contains(strings.ToLower(n.ID), term) {
+				matches = append(matches, n)
+			}
+		}
+
+		if len(matches) == 0 {
+			fmt.Println("No matches found.")
+			return nil
+		}
+
+		for _, n := range matches {
+			tag := strings.ToUpper(string(n.Type)[:3])
+			status := ""
+			if n.Status != "" {
+				status = fmt.Sprintf("  (%s)", n.Status)
+			}
+			fmt.Printf("  [%s] %-40s %s%s\n", tag, n.ID, n.Path, status)
+		}
+		fmt.Printf("\n%d result(s)\n", len(matches))
+		return nil
+	},
+}
+
+var contextCmd = &cobra.Command{
+	Use:   "context <id>",
+	Short: "Show relationships for an artifact (micrograph view)",
+	Long:  "Display the neighborhood of a node — all directly related artifacts grouped by relationship type.",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		cfg := ctx.Value(configKey{}).(*Config)
+		dbPath := filepath.Join(cfg.CampRoot, ".campaign", "graph.db")
+
+		store, err := graph.OpenStore(ctx, dbPath)
+		if err != nil {
+			return fmt.Errorf("open store (run 'camp-graph build' first): %w", err)
+		}
+		defer store.Close()
+
+		g, err := graph.LoadGraph(ctx, store)
+		if err != nil {
+			return fmt.Errorf("load graph: %w", err)
+		}
+
+		nodeID := args[0]
+		center := g.Node(nodeID)
+		if center == nil {
+			return fmt.Errorf("node %q not found (use 'camp-graph query' to search)", nodeID)
+		}
+
+		tag := strings.ToUpper(string(center.Type)[:3])
+		fmt.Printf("\n  [%s] %s - %s", tag, center.ID, center.Name)
+		if center.Status != "" {
+			fmt.Printf(" (%s)", center.Status)
+		}
+		fmt.Printf("\n  Path: %s\n", center.Path)
+
+		sub := g.Subgraph(nodeID, contextHops)
+
+		fmt.Println("\n  Relationships:")
+		outgoing := g.EdgesFrom(nodeID)
+		edgeGroups := make(map[graph.EdgeType][]*graph.Edge)
+		for _, e := range outgoing {
+			edgeGroups[e.Type] = append(edgeGroups[e.Type], e)
+		}
+		for edgeType, edges := range edgeGroups {
+			fmt.Printf("    %s ──►\n", edgeType)
+			for _, e := range edges {
+				if n := sub.Node(e.ToID); n != nil {
+					ntag := strings.ToUpper(string(n.Type)[:3])
+					fmt.Printf("      [%s] %s\n", ntag, n.ID)
+				}
+			}
+		}
+
+		incoming := g.EdgesTo(nodeID)
+		inGroups := make(map[graph.EdgeType][]*graph.Edge)
+		for _, e := range incoming {
+			inGroups[e.Type] = append(inGroups[e.Type], e)
+		}
+		for edgeType, edges := range inGroups {
+			fmt.Printf("    %s ◄──\n", edgeType)
+			for _, e := range edges {
+				if n := sub.Node(e.FromID); n != nil {
+					ntag := strings.ToUpper(string(n.Type)[:3])
+					fmt.Printf("      [%s] %s\n", ntag, n.ID)
+				}
+			}
+		}
+
+		fmt.Println()
 		return nil
 	},
 }
