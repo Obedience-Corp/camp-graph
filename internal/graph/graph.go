@@ -62,6 +62,84 @@ func (g *Graph) EdgeCount() int {
 	return len(g.edges)
 }
 
+// NodesByType returns all nodes matching the given type.
+func (g *Graph) NodesByType(t NodeType) []*Node {
+	var result []*Node
+	for _, n := range g.nodes {
+		if n.Type == t {
+			result = append(result, n)
+		}
+	}
+	return result
+}
+
+// EdgesFrom returns all edges originating from the given node ID.
+func (g *Graph) EdgesFrom(id string) []*Edge {
+	var result []*Edge
+	for _, e := range g.edges {
+		if e.FromID == id {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+// EdgesTo returns all edges pointing to the given node ID.
+func (g *Graph) EdgesTo(id string) []*Edge {
+	var result []*Edge
+	for _, e := range g.edges {
+		if e.ToID == id {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+// Subgraph extracts the neighborhood around a node within the given hop count.
+// Returns a new Graph containing only nodes and edges within range.
+func (g *Graph) Subgraph(id string, hops int) *Graph {
+	sub := New()
+	if g.nodes[id] == nil {
+		return sub
+	}
+
+	visited := map[string]bool{id: true}
+	frontier := []string{id}
+
+	for hop := 0; hop < hops && len(frontier) > 0; hop++ {
+		var next []string
+		for _, nid := range frontier {
+			for _, e := range g.edges {
+				var neighborID string
+				if e.FromID == nid {
+					neighborID = e.ToID
+				} else if e.ToID == nid {
+					neighborID = e.FromID
+				} else {
+					continue
+				}
+				if !visited[neighborID] {
+					visited[neighborID] = true
+					next = append(next, neighborID)
+				}
+			}
+		}
+		frontier = next
+	}
+
+	for nid := range visited {
+		if n := g.nodes[nid]; n != nil {
+			sub.AddNode(n)
+		}
+	}
+	for _, e := range g.edges {
+		if visited[e.FromID] && visited[e.ToID] {
+			sub.AddEdge(e)
+		}
+	}
+	return sub
+}
+
 // Neighbors returns all nodes directly connected to the given node ID.
 func (g *Graph) Neighbors(id string) []*Node {
 	seen := make(map[string]bool)

@@ -77,6 +77,72 @@ type Edge struct {
 	CreatedAt  time.Time        `json:"created_at"`
 }
 
+// String returns the display name for a NodeType.
+func (t NodeType) String() string {
+	switch t {
+	case NodeProject:
+		return "project"
+	case NodeFestival:
+		return "festival"
+	case NodeChain:
+		return "chain"
+	case NodePhase:
+		return "phase"
+	case NodeSequence:
+		return "sequence"
+	case NodeTask:
+		return "task"
+	case NodeIntent:
+		return "intent"
+	case NodeDesignDoc:
+		return "design_doc"
+	case NodeExploreDoc:
+		return "explore_doc"
+	case NodeFile:
+		return "file"
+	case NodeFunction:
+		return "function"
+	case NodeTypeDef:
+		return "type_def"
+	case NodePackage:
+		return "package"
+	default:
+		return string(t)
+	}
+}
+
+// String returns the display name for an EdgeType.
+func (t EdgeType) String() string {
+	switch t {
+	case EdgeContains:
+		return "contains"
+	case EdgeChainMember:
+		return "chain_member"
+	case EdgeDependsOn:
+		return "depends_on"
+	case EdgeLinksTo:
+		return "links_to"
+	case EdgeRelatesTo:
+		return "relates_to"
+	case EdgeGatheredFrom:
+		return "gathered_from"
+	case EdgeReferences:
+		return "references"
+	case EdgeSimilarTo:
+		return "similar_to"
+	case EdgeDefines:
+		return "defines"
+	case EdgeCalls:
+		return "calls"
+	case EdgeImports:
+		return "imports"
+	case EdgeModifies:
+		return "modifies"
+	default:
+		return string(t)
+	}
+}
+
 // NewNode creates a Node with initialized metadata and timestamps.
 // Always prefer NewNode over struct literals to avoid nil Metadata panics
 // and zero-value CreatedAt/UpdatedAt in JSON output.
