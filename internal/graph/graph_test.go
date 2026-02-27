@@ -443,6 +443,36 @@ func TestSubgraph_LargerHops(t *testing.T) {
 	}
 }
 
+func TestEmptyGraphOperations(t *testing.T) {
+	g := New()
+
+	if g.NodeCount() != 0 {
+		t.Errorf("empty graph NodeCount: got %d, want 0", g.NodeCount())
+	}
+	if g.EdgeCount() != 0 {
+		t.Errorf("empty graph EdgeCount: got %d, want 0", g.EdgeCount())
+	}
+	if n := g.Node("missing"); n != nil {
+		t.Errorf("empty graph Node(missing): got %v, want nil", n)
+	}
+	if nodes := g.NodesByType(NodeProject); len(nodes) != 0 {
+		t.Errorf("empty graph NodesByType: got %d, want 0", len(nodes))
+	}
+	if edges := g.EdgesFrom("missing"); len(edges) != 0 {
+		t.Errorf("empty graph EdgesFrom: got %d, want 0", len(edges))
+	}
+	if edges := g.EdgesTo("missing"); len(edges) != 0 {
+		t.Errorf("empty graph EdgesTo: got %d, want 0", len(edges))
+	}
+	if neighbors := g.Neighbors("missing"); len(neighbors) != 0 {
+		t.Errorf("empty graph Neighbors: got %d, want 0", len(neighbors))
+	}
+	sub := g.Subgraph("missing", 3)
+	if sub.NodeCount() != 0 {
+		t.Errorf("empty graph Subgraph: got %d nodes, want 0", sub.NodeCount())
+	}
+}
+
 func TestNeighbors(t *testing.T) {
 	tests := []struct {
 		name            string
