@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -79,6 +80,67 @@ func TestGetCampRoot_Precedence(t *testing.T) {
 			}
 		})
 	}
+}
+
+// setupTestCampaign creates a minimal campaign layout in a temp directory.
+func setupTestCampaign(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+
+	dirs := []string{
+		"projects/alpha",
+		"projects/beta",
+		"festivals/active/test-fest-TF0001/001_IMPLEMENT/01_seq",
+		"workflow/intents/test-intent",
+		"workflow/design/test-design",
+		".campaign",
+	}
+	for _, d := range dirs {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", d, err)
+		}
+	}
+
+	festYAML := `project_path: projects/alpha`
+	if err := os.WriteFile(
+		filepath.Join(root, "festivals/active/test-fest-TF0001/fest.yaml"),
+		[]byte(festYAML), 0o644,
+	); err != nil {
+		t.Fatalf("write fest.yaml: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(root, "festivals/active/test-fest-TF0001/001_IMPLEMENT/01_seq/01_task.md"),
+		[]byte("# Task"), 0o644,
+	); err != nil {
+		t.Fatalf("write task: %v", err)
+	}
+
+	return root
+}
+
+func TestBuildCommand(t *testing.T) {
+	root := setupTestCampaign(t)
+	dbPath := filepath.Join(root, ".campaign", "graph.db")
+
+	t.Setenv("CAMP_ROOT", root)
+
+	rootCmd.SetArgs([]string{"build", "--output", dbPath})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build command: %v", err)
+	}
+
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Fatal("graph.db was not created")
+	}
+}
+
+func TestQueryCommand(t *testing.T) {
+	t.Skip("stub: implement after build+query integration is wired")
+}
+
+func TestContextCommand(t *testing.T) {
+	t.Skip("stub: implement after build+context integration is wired")
 }
 
 func TestConfig_Fields(t *testing.T) {
