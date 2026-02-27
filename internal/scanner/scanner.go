@@ -38,6 +38,20 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 	if err := s.scanWorkflow(ctx, g); err != nil {
 		return nil, fmt.Errorf("scan workflow: %w", err)
 	}
+
+	// Pass 2: Extract metadata and create relationship edges
+	for _, n := range g.Nodes() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		switch n.Type {
+		case graph.NodeFestival:
+			extractFestivalMetadata(ctx, g, n.ID, n.Path)
+		case graph.NodeIntent:
+			extractIntentMetadata(ctx, g, n.ID, n.Path)
+		}
+	}
+
 	return g, nil
 }
 
