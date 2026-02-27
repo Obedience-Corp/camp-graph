@@ -131,6 +131,36 @@ func (s *Store) GetNodesByType(ctx context.Context, t NodeType) ([]*Node, error)
 	return scanNodes(rows)
 }
 
+// GetAllNodes returns every node in the database.
+func (s *Store) GetAllNodes(ctx context.Context) ([]*Node, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, type, name, path, status, metadata, created_at, updated_at FROM nodes`)
+	if err != nil {
+		return nil, fmt.Errorf("query all nodes: %w", err)
+	}
+	defer rows.Close()
+	return scanNodes(rows)
+}
+
+// GetAllEdges returns every edge in the database.
+func (s *Store) GetAllEdges(ctx context.Context) ([]*Edge, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT from_id, to_id, type, confidence, source, subtype, note, created_at FROM edges`)
+	if err != nil {
+		return nil, fmt.Errorf("query all edges: %w", err)
+	}
+	defer rows.Close()
+	var edges []*Edge
+	for rows.Next() {
+		e := &Edge{}
+		if err := rows.Scan(&e.FromID, &e.ToID, &e.Type, &e.Confidence, &e.Source, &e.Subtype, &e.Note, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan edge row: %w", err)
+		}
+		edges = append(edges, e)
+	}
+	return edges, rows.Err()
+}
+
 // DeleteAll removes all nodes and edges from the database.
 func (s *Store) DeleteAll(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM edges"); err != nil {
