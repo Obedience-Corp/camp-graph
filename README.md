@@ -36,6 +36,37 @@ just lint     # Format + vet
 just install  # Install to $GOBIN
 ```
 
+## Intent Graph
+
+Intents are raw ideas — observations, feature requests, research topics, or maintenance chores captured before they're formalized. In the knowledge graph, intents are first-class nodes that connect to everything they eventually become.
+
+### How Intents Feed the System
+
+- **Workflow items** — An intent triaged as urgent becomes a workflow task for immediate action
+- **Design documents** — An intent that needs deeper exploration spawns a design doc in `workflow/design/`
+- **Festivals** — An intent (or group of related intents) ready for structured execution gets promoted to a festival
+- **Other intents** — Intents can reference each other, forming clusters around a common theme
+
+### Intent Lifecycle
+
+```
+capture → triage → promote → track
+```
+
+1. **Capture** — Record the raw idea with minimal friction (`camp intent add`)
+2. **Triage** — Evaluate priority, feasibility, and category (`inbox/` → `active/`)
+3. **Promote** — Convert to a workflow item, design doc, or festival (`active/` → `ready/` → promoted)
+4. **Track** — The graph links the original intent to its promoted artifact, so you can trace any deliverable back to the idea that started it
+
+### Graph Representation
+
+```bash
+camp graph query "dark-mode"     # Find the intent node and all connected artifacts
+camp graph context INTENT-001    # Show relationships: which festival, design doc, or workflow item it became
+```
+
+Intents appear as nodes with edges to their promoted artifacts. This makes the knowledge graph a complete record of how ideas flow through the system — from first capture to final delivery.
+
 ## Architecture
 
 `camp-graph` is a **separate binary** that plugs into camp via the git-style plugin pattern. When you run `camp graph`, camp discovers `camp-graph` on `$PATH` and delegates to it. Zero coupling, independent release cycles.
