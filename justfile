@@ -4,20 +4,16 @@
 set dotenv-load := true
 
 # Configuration
+BUILDTOOL := "go run ./internal/buildutil"
 binary_name := "camp-graph"
 bin_dir := "bin"
 gobin := env_var_or_default("GOBIN", `go env GOPATH` + "/bin")
-version_pkg := "github.com/Obedience-Corp/camp-graph/internal/version"
-version := env_var_or_default("VERSION", "dev")
-commit := `git rev-parse --short HEAD 2>/dev/null || echo "unknown"`
-build_date := `date -u +"%Y-%m-%dT%H:%M:%SZ"`
-ldflags := "-X " + version_pkg + ".Version=" + version + " -X " + version_pkg + ".Commit=" + commit + " -X " + version_pkg + ".BuildDate=" + build_date
 
 # Modules
 [doc('Cross-platform builds')]
 mod xbuild '.justfiles/build.just'
 
-[doc('Testing (unit, coverage, benchmarks)')]
+[doc('Testing (unit, coverage, benchmarks, integration)')]
 mod test '.justfiles/test.just'
 
 [doc('Release and versioning')]
@@ -29,13 +25,15 @@ default:
     @echo ""
     @just --list --unsorted
 
-# Build camp-graph binary
+# Build camp-graph binary (with dashboard)
 [no-cd]
 build:
-    @echo "Building camp-graph..."
-    @mkdir -p {{bin_dir}}
-    go build -ldflags '{{ldflags}}' -o {{bin_dir}}/{{binary_name}} ./cmd/camp-graph
-    @echo "Built {{bin_dir}}/{{binary_name}}"
+    @{{BUILDTOOL}} build
+
+# Build binary only (fast, no vet)
+[no-cd]
+build-only:
+    @{{BUILDTOOL}} build-only
 
 # Format Go code
 [no-cd]
@@ -55,9 +53,7 @@ lint: fmt vet
 # Clean build artifacts
 [no-cd]
 clean:
-    rm -rf {{bin_dir}}
-    rm -f coverage.out coverage.html
-    @echo "Cleaned build artifacts"
+    @{{BUILDTOOL}} clean
 
 # Update and tidy dependencies
 [no-cd]

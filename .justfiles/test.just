@@ -1,20 +1,22 @@
 # Test recipes
+BUILDTOOL := "go run ./internal/buildutil"
 
 [private]
 default:
     @just --list --unsorted --justfile {{source_file()}}
 
-# Run all tests
+# Run all tests (unit + integration) with dashboard
 [no-cd]
 all:
-    go test -race -cover ./...
+    @{{BUILDTOOL}} test
+    @{{BUILDTOOL}} integration
 
-# Run unit tests only
+# Run unit tests with dashboard
 [no-cd]
 unit:
-    go test -short -timeout 30s ./...
+    @{{BUILDTOOL}} test
 
-# Run tests with verbose output
+# Run tests with verbose output (standard go test)
 [no-cd]
 verbose:
     go test -race -cover -v ./...
@@ -41,15 +43,20 @@ bench:
 # Integration Tests (require Docker/Colima)
 # ============================================
 
-# Run integration tests with verbose output
+# Run integration tests with dashboard
 [no-cd]
 integration:
+    @{{BUILDTOOL}} integration
+
+# Run integration tests with verbose output (standard go test)
+[no-cd]
+integration-verbose:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building Linux binary for containers..."
     mkdir -p bin/linux
     GOOS=linux GOARCH=$(go env GOARCH) go build -o bin/linux/camp-graph ./cmd/camp-graph
-    echo "Running container-based integration tests..."
+    echo "Running container-based integration tests (verbose)..."
     DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock" \
     TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
     go test -v -count=1 -tags=integration ./tests/integration/... -timeout 5m 2>&1
