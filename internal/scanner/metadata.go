@@ -103,36 +103,27 @@ func extractChainMetadata(_ context.Context, g *graph.Graph, chainID, chainPath 
 }
 
 // extractIntentMetadata reads intent YAML frontmatter and creates edges.
+// intentPath is the path to the intent .md file itself.
 func extractIntentMetadata(_ context.Context, g *graph.Graph, intentID, intentPath string) {
-	entries, err := os.ReadDir(intentPath)
+	data, err := os.ReadFile(intentPath)
 	if err != nil {
 		return
 	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
+	fm, err := parseYAMLFrontmatter(data)
+	if err != nil {
+		return
+	}
+	for _, source := range fm.GatheredFrom {
+		sourceID := "project:" + source
+		if g.Node(sourceID) != nil {
+			g.AddEdge(graph.NewEdge(intentID, sourceID, graph.EdgeGatheredFrom, 1.0, graph.SourceExplicit))
 		}
-		data, err := os.ReadFile(filepath.Join(intentPath, e.Name()))
-		if err != nil {
-			continue
+	}
+	for _, proj := range fm.RelatedProjects {
+		projID := "project:" + proj
+		if g.Node(projID) != nil {
+			g.AddEdge(graph.NewEdge(intentID, projID, graph.EdgeRelatesTo, 0.8, graph.SourceExplicit))
 		}
-		fm, err := parseYAMLFrontmatter(data)
-		if err != nil {
-			continue
-		}
-		for _, source := range fm.GatheredFrom {
-			sourceID := "project:" + source
-			if g.Node(sourceID) != nil {
-				g.AddEdge(graph.NewEdge(intentID, sourceID, graph.EdgeGatheredFrom, 1.0, graph.SourceExplicit))
-			}
-		}
-		for _, proj := range fm.RelatedProjects {
-			projID := "project:" + proj
-			if g.Node(projID) != nil {
-				g.AddEdge(graph.NewEdge(intentID, projID, graph.EdgeRelatesTo, 0.8, graph.SourceExplicit))
-			}
-		}
-		break
 	}
 }
 

@@ -141,14 +141,14 @@ func TestIntentMetadataExtraction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create intent with frontmatter
-	intentDir := filepath.Join(root, "workflow/intents/test-intent")
+	// Create intent file in .campaign/intents/inbox/
+	intentDir := filepath.Join(root, ".campaign/intents/inbox")
 	if err := os.MkdirAll(intentDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	intentMD := []byte("---\ngathered_from:\n  - source-proj\nrelated_projects:\n  - source-proj\n---\n# Test Intent\n")
-	if err := os.WriteFile(filepath.Join(intentDir, "intent.md"), intentMD, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(intentDir, "test-intent.md"), intentMD, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

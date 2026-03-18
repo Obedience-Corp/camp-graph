@@ -21,7 +21,7 @@ func createMinimalCampaign(t *testing.T) string {
 		"festivals/active/test-fest-TF0001/001_BUILD/01_core",
 		"festivals/planning/plan-fest-PF0001",
 		"festivals/dungeon/completed/done-fest-DF0001",
-		"workflow/intents/my-intent",
+		".campaign/intents/inbox",
 		"workflow/design/my-design",
 		"workflow/explore/my-explore",
 	}
@@ -36,6 +36,11 @@ func createMinimalCampaign(t *testing.T) string {
 		if err := os.WriteFile(filepath.Join(seqDir, name), []byte("# "+name), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+
+	// Create an intent file
+	if err := os.WriteFile(filepath.Join(root, ".campaign/intents/inbox/my-intent.md"), []byte("# My Intent\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 
 	return root
