@@ -24,8 +24,10 @@ func newTaskNode(name, path, sequenceID string) *graph.Node {
 	return graph.NewNode(sequenceID+"/"+name, graph.NodeTask, name, path)
 }
 
-func newIntentNode(name, path string) *graph.Node {
-	return graph.NewNode("intent:"+name, graph.NodeIntent, name, path)
+func newIntentNode(name, path, status string) *graph.Node {
+	n := graph.NewNode("intent:"+name, graph.NodeIntent, name, path)
+	n.Status = status
+	return n
 }
 
 func newDesignDocNode(name, path string) *graph.Node {

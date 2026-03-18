@@ -35,6 +35,9 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 	if err := s.scanFestivals(ctx, g); err != nil {
 		return nil, fmt.Errorf("scan festivals: %w", err)
 	}
+	if err := s.scanIntents(ctx, g); err != nil {
+		return nil, fmt.Errorf("scan intents: %w", err)
+	}
 	if err := s.scanWorkflow(ctx, g); err != nil {
 		return nil, fmt.Errorf("scan workflow: %w", err)
 	}
@@ -178,7 +181,68 @@ func isPhaseDir(name string) bool {
 	return name[3] == '_'
 }
 
-// scanWorkflow discovers intent, design, and explore nodes under workflow/.
+// scanIntents discovers intent nodes under .campaign/intents/.
+// Intents are .md files organized into lifecycle sub-directories.
+func (s *Scanner) scanIntents(ctx context.Context, g *graph.Graph) error {
+	intentsRoot := filepath.Join(s.root, ".campaign", "intents")
+
+	scanMDFiles := func(dir, status string) error {
+		entries, err := os.ReadDir(dir)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				continue
+			}
+			name := strings.TrimSuffix(e.Name(), ".md")
+			node := newIntentNode(name, filepath.Join(dir, e.Name()), status)
+			g.AddNode(node)
+		}
+		return nil
+	}
+
+	// Direct lifecycle dirs
+	for _, status := range []string{"inbox", "active", "ready"} {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err := scanMDFiles(filepath.Join(intentsRoot, status), status); err != nil {
+			return fmt.Errorf("scan intents/%s: %w", status, err)
+		}
+	}
+
+	// Dungeon sub-dirs
+	dungeonDir := filepath.Join(intentsRoot, "dungeon")
+	dungeonEntries, err := os.ReadDir(dungeonDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read intents/dungeon: %w", err)
+	}
+	for _, de := range dungeonEntries {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !de.IsDir() || strings.HasPrefix(de.Name(), ".") {
+			continue
+		}
+		if err := scanMDFiles(filepath.Join(dungeonDir, de.Name()), de.Name()); err != nil {
+			return fmt.Errorf("scan intents/dungeon/%s: %w", de.Name(), err)
+		}
+	}
+
+	return nil
+}
+
+// scanWorkflow discovers design and explore nodes under workflow/.
 func (s *Scanner) scanWorkflow(ctx context.Context, g *graph.Graph) error {
 	wfRoot := filepath.Join(s.root, "workflow")
 	scanDir := func(subdir string, makeFn func(string, string) *graph.Node) error {
@@ -203,9 +267,6 @@ func (s *Scanner) scanWorkflow(ctx context.Context, g *graph.Graph) error {
 		return nil
 	}
 
-	if err := scanDir("intents", newIntentNode); err != nil {
-		return fmt.Errorf("scan intents: %w", err)
-	}
 	if err := scanDir("design", newDesignDocNode); err != nil {
 		return fmt.Errorf("scan design: %w", err)
 	}

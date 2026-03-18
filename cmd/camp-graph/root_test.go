@@ -91,9 +91,8 @@ func setupTestCampaign(t *testing.T) string {
 		"projects/alpha",
 		"projects/beta",
 		"festivals/active/test-fest-TF0001/001_IMPLEMENT/01_seq",
-		"workflow/intents/test-intent",
+		".campaign/intents/inbox",
 		"workflow/design/test-design",
-		".campaign",
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
@@ -114,6 +113,13 @@ func setupTestCampaign(t *testing.T) string {
 		[]byte("# Task"), 0o644,
 	); err != nil {
 		t.Fatalf("write task: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(root, ".campaign/intents/inbox/test-intent.md"),
+		[]byte("# Test Intent\n"), 0o644,
+	); err != nil {
+		t.Fatalf("write intent: %v", err)
 	}
 
 	return root
