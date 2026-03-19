@@ -1,6 +1,7 @@
 # Binaries (all should go in bin/)
 bin/
 /camp-graph
+/buildutil
 
 # Test coverage files
 coverage.out
