@@ -4,7 +4,7 @@
 set dotenv-load := true
 
 # Configuration
-BUILDTOOL := "go run ./internal/buildutil"
+BUILDTOOL := "bin/.buildutil"
 binary_name := "camp-graph"
 bin_dir := "bin"
 gobin := env_var_or_default("GOBIN", `go env GOPATH` + "/bin")
@@ -25,14 +25,20 @@ default:
     @echo ""
     @just --list --unsorted
 
+# Compile the buildutil wrapper (cached, only rebuilds when missing)
+[private]
+[no-cd]
+_buildtool:
+    @test -f {{BUILDTOOL}} || (mkdir -p bin && go build -o {{BUILDTOOL}} ./internal/buildutil)
+
 # Build camp-graph binary (with dashboard)
 [no-cd]
-build:
+build: _buildtool
     @{{BUILDTOOL}} build
 
 # Build binary only (fast, no vet)
 [no-cd]
-build-only:
+build-only: _buildtool
     @{{BUILDTOOL}} build-only
 
 # Format Go code
@@ -52,7 +58,7 @@ lint: fmt vet
 
 # Clean build artifacts
 [no-cd]
-clean:
+clean: _buildtool
     @{{BUILDTOOL}} clean
 
 # Update and tidy dependencies

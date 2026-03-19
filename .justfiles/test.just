@@ -1,19 +1,25 @@
 # Test recipes
-BUILDTOOL := "go run ./internal/buildutil"
+BUILDTOOL := "bin/.buildutil"
 
 [private]
 default:
     @just --list --unsorted --justfile {{source_file()}}
 
+# Ensure buildutil binary is compiled
+[private]
+[no-cd]
+_buildtool:
+    @test -f {{BUILDTOOL}} || (mkdir -p bin && go build -o {{BUILDTOOL}} ./internal/buildutil)
+
 # Run all tests (unit + integration) with dashboard
 [no-cd]
-all:
+all: _buildtool
     @{{BUILDTOOL}} test
     @{{BUILDTOOL}} integration
 
 # Run unit tests with dashboard
 [no-cd]
-unit:
+unit: _buildtool
     @{{BUILDTOOL}} test
 
 # Run tests with verbose output (standard go test)
@@ -45,7 +51,7 @@ bench:
 
 # Run integration tests with dashboard
 [no-cd]
-integration:
+integration: _buildtool
     @{{BUILDTOOL}} integration
 
 # Run integration tests with verbose output (standard go test)
