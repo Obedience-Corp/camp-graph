@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/Obedience-Corp/obey-shared/buildutil"
 )
@@ -31,7 +32,7 @@ func ldflags() string {
 	versionPkg := "github.com/Obedience-Corp/camp-graph/internal/version"
 	version := envOrDefault("VERSION", "dev")
 	commit := cmdOutput("git", "rev-parse", "--short", "HEAD")
-	date := cmdOutput("date", "-u", "+%Y-%m-%dT%H:%M:%SZ")
+	date := time.Now().UTC().Format(time.RFC3339)
 
 	parts := []string{
 		fmt.Sprintf("-X %s.Version=%s", versionPkg, version),
