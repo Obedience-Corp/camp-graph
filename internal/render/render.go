@@ -1,3 +1,3 @@
 // Package render produces visual output from a knowledge graph.
-// Supports DOT, Mermaid, and (via go-graphviz) SVG/PNG output.
+// Supports DOT, SVG, and PNG output via go-graphviz (WASM).
 package render
