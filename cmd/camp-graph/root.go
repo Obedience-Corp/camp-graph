@@ -427,8 +427,8 @@ var renderCmd = &cobra.Command{
 			}
 		}
 
-		// Auto-save to .campaign/graphs/ unless --no-save.
-		if !renderNoSave {
+		// Auto-save to .campaign/graphs/ unless --no-save or --output is set.
+		if !renderNoSave && renderOutput == "" {
 			if err := os.MkdirAll(graphsDir, 0o755); err != nil {
 				return fmt.Errorf("create graphs directory: %w", err)
 			}
@@ -443,7 +443,7 @@ var renderCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Saved to %s\n", defaultPath)
 		}
 
-		// For non-DOT with no --output and --no-save, there's nowhere to write.
+		// For non-DOT with no file destination, there's nowhere to write.
 		if renderOutput == "" && renderNoSave && format != render.FormatDOT {
 			return fmt.Errorf("format %q requires a file output; use --output or remove --no-save", format)
 		}
@@ -451,7 +451,7 @@ var renderCmd = &cobra.Command{
 		// Open the file if requested.
 		if renderOpen {
 			target := defaultPath
-			if renderNoSave && renderOutput != "" {
+			if renderOutput != "" {
 				target = renderOutput
 			}
 			if err := render.OpenFile(target); err != nil {
@@ -465,6 +465,6 @@ var renderCmd = &cobra.Command{
 
 // sanitizeNodeID converts a node ID to a filesystem-safe string.
 func sanitizeNodeID(id string) string {
-	safe := strings.NewReplacer(":", "-", "/", "-", " ", "-").Replace(id)
+	safe := strings.NewReplacer(":", "-", "/", "-", " ", "-", "..", "-").Replace(id)
 	return safe
 }
