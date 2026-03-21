@@ -69,10 +69,13 @@ func init() {
 	contextCmd.Flags().BoolVar(&contextDot, "dot", false, "output micrograph as DOT format")
 
 	browseCmd.Flags().StringVar(&browsePath, "db", "", "path to graph database")
-	renderCmd.Flags().StringVarP(&renderOutput, "output", "o", "", "write DOT output to file instead of stdout")
+	renderCmd.Flags().StringVarP(&renderOutput, "output", "o", "", "write output to file instead of stdout")
 	renderCmd.Flags().StringVar(&renderNode, "node", "", "render only the neighborhood of this node ID")
 	renderCmd.Flags().IntVar(&renderHops, "hops", 2, "neighborhood depth when using --node")
 	renderCmd.Flags().StringVar(&renderDB, "db", "", "path to graph database")
+	renderCmd.Flags().StringVarP(&renderFormat, "format", "f", "dot", "output format: dot, svg, png")
+	renderCmd.Flags().BoolVar(&renderOpen, "open", false, "open rendered file after writing")
+	renderCmd.Flags().BoolVar(&renderNoSave, "no-save", false, "skip auto-save to .campaign/graphs/")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(buildCmd)
@@ -92,6 +95,9 @@ var (
 	renderNode   string
 	renderHops   int
 	renderDB     string
+	renderFormat string
+	renderOpen   bool
+	renderNoSave bool
 )
 
 // Execute runs the root command.
@@ -355,11 +361,16 @@ var browseCmd = &cobra.Command{
 
 var renderCmd = &cobra.Command{
 	Use:   "render",
-	Short: "Render graph as DOT/Graphviz output",
-	Long:  "Output the knowledge graph in Graphviz DOT format for visualization.",
+	Short: "Render graph as DOT, SVG, or PNG",
+	Long:  "Output the knowledge graph in DOT, SVG, or PNG format.\nBy default, output is also saved to .campaign/graphs/ for easy access.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg := ctx.Value(configKey{}).(*Config)
+
+		format, err := render.ParseFormat(renderFormat)
+		if err != nil {
+			return err
+		}
 
 		dbPath := renderDB
 		if dbPath == "" {
@@ -388,16 +399,72 @@ var renderCmd = &cobra.Command{
 			}
 		}
 
-		var w io.Writer = os.Stdout
+		// Build the default .campaign/graphs/ filename.
+		graphsDir := filepath.Join(cfg.CampRoot, ".campaign", "graphs")
+		baseName := "campaign-graph"
+		if renderNode != "" {
+			baseName = "campaign-graph-" + sanitizeNodeID(renderNode)
+		}
+		defaultPath := filepath.Join(graphsDir, baseName+"."+string(format))
+
+		// Render to --output if specified.
 		if renderOutput != "" {
 			f, err := os.Create(renderOutput)
 			if err != nil {
 				return fmt.Errorf("create output file: %w", err)
 			}
 			defer f.Close()
-			w = f
+			if err := render.Render(ctx, f, g, format); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "Wrote %s\n", renderOutput)
 		}
 
-		return render.RenderDOT(w, g)
+		// For DOT with no --output and no --no-save, also write to stdout.
+		if renderOutput == "" && format == render.FormatDOT {
+			if err := render.Render(ctx, os.Stdout, g, format); err != nil {
+				return err
+			}
+		}
+
+		// Auto-save to .campaign/graphs/ unless --no-save or --output is set.
+		if !renderNoSave && renderOutput == "" {
+			if err := os.MkdirAll(graphsDir, 0o755); err != nil {
+				return fmt.Errorf("create graphs directory: %w", err)
+			}
+			f, err := os.Create(defaultPath)
+			if err != nil {
+				return fmt.Errorf("create graphs file: %w", err)
+			}
+			defer f.Close()
+			if err := render.Render(ctx, f, g, format); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "Saved to %s\n", defaultPath)
+		}
+
+		// For non-DOT with no file destination, there's nowhere to write.
+		if renderOutput == "" && renderNoSave && format != render.FormatDOT {
+			return fmt.Errorf("format %q requires a file output; use --output or remove --no-save", format)
+		}
+
+		// Open the file if requested.
+		if renderOpen {
+			target := defaultPath
+			if renderOutput != "" {
+				target = renderOutput
+			}
+			if err := render.OpenFile(target); err != nil {
+				return fmt.Errorf("open file: %w", err)
+			}
+		}
+
+		return nil
 	},
+}
+
+// sanitizeNodeID converts a node ID to a filesystem-safe string.
+func sanitizeNodeID(id string) string {
+	safe := strings.NewReplacer(":", "-", "/", "-", " ", "-", "..", "-").Replace(id)
+	return safe
 }
