@@ -209,7 +209,10 @@ func TestIntentMetadataEdges(t *testing.T) {
 func TestMinimalCampaignBuild(t *testing.T) {
 	tc := GetSharedContainer(t)
 
-	// Minimal campaign needs at least projects/ to be recognized
+	// Minimal campaign needs .campaign/ marker and projects/ to be recognized
+	if err := tc.MkdirAll("/campaign/.campaign"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tc.MkdirAll("/campaign/projects"); err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +227,10 @@ func TestNoIntentsDirectory(t *testing.T) {
 	tc := GetSharedContainer(t)
 	root := "/campaign"
 
-	// Create only projects and festivals, no .campaign/intents/
+	// Create .campaign/ marker and projects, but no .campaign/intents/
+	if err := tc.MkdirAll(root + "/.campaign"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tc.MkdirAll(root + "/projects/my-proj"); err != nil {
 		t.Fatal(err)
 	}
