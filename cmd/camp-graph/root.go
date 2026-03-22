@@ -55,11 +55,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&cfg.Verbose, "verbose", false, "enable verbose output")
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("determining working directory: %w", err)
-		}
-		root, err := camputil.FindCampaignRoot(cmd.Context(), cwd)
+		root, err := camputil.FindCampaignRoot(cmd.Context(), "")
 		if err != nil {
 			return fmt.Errorf("determining campaign root: %w", err)
 		}
