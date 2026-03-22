@@ -15,6 +15,7 @@ import (
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
 	"github.com/Obedience-Corp/camp-graph/internal/tui"
 	"github.com/Obedience-Corp/camp-graph/internal/version"
+	"github.com/Obedience-Corp/obey-shared/camputil"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +55,11 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&cfg.Verbose, "verbose", false, "enable verbose output")
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		root, err := getCampRoot()
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("determining working directory: %w", err)
+		}
+		root, err := camputil.FindCampaignRoot(cmd.Context(), cwd)
 		if err != nil {
 			return fmt.Errorf("determining campaign root: %w", err)
 		}
@@ -103,13 +108,6 @@ var (
 // Execute runs the root command.
 func Execute() error {
 	return rootCmd.Execute()
-}
-
-func getCampRoot() (string, error) {
-	if root := os.Getenv("CAMP_ROOT"); root != "" {
-		return root, nil
-	}
-	return os.Getwd()
 }
 
 var versionCmd = &cobra.Command{

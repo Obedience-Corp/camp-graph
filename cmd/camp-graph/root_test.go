@@ -6,79 +6,51 @@ import (
 	"testing"
 )
 
-func TestGetCampRoot_EnvVar(t *testing.T) {
-	want := "/home/user/my-campaign"
-	t.Setenv("CAMP_ROOT", want)
-
-	got, err := getCampRoot()
-	if err != nil {
-		t.Fatalf("getCampRoot() returned unexpected error: %v", err)
+func TestCampRoot_EnvVar(t *testing.T) {
+	root := t.TempDir()
+	// Must have .campaign/ for the env var to be accepted.
+	if err := os.MkdirAll(filepath.Join(root, ".campaign"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if got != want {
-		t.Errorf("getCampRoot() = %q, want %q", got, want)
+	t.Setenv("CAMP_ROOT", root)
+
+	rootCmd.SetArgs([]string{"version"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command with CAMP_ROOT failed: %v", err)
 	}
 }
 
-func TestGetCampRoot_CwdFallback(t *testing.T) {
+func TestCampRoot_InvalidEnvVar(t *testing.T) {
+	t.Setenv("CAMP_ROOT", "/nonexistent/path")
+
+	rootCmd.SetArgs([]string{"build"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for invalid CAMP_ROOT")
+	}
+}
+
+func TestCampRoot_WalksUp(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".campaign"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "projects", "myapp", "src")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Unset CAMP_ROOT, change to nested dir so walk-up kicks in.
 	t.Setenv("CAMP_ROOT", "")
-
-	expectedCwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("os.Getwd() failed in test setup: %v", err)
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(nested); err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() { os.Chdir(origDir) })
 
-	got, err := getCampRoot()
-	if err != nil {
-		t.Fatalf("getCampRoot() returned unexpected error: %v", err)
-	}
-	if got == "" {
-		t.Error("getCampRoot() returned empty string on cwd fallback")
-	}
-	if got != expectedCwd {
-		t.Errorf("getCampRoot() = %q, want cwd %q", got, expectedCwd)
-	}
-}
-
-func TestGetCampRoot_Precedence(t *testing.T) {
-	tests := []struct {
-		name       string
-		campRoot   string
-		wantEnvVal bool
-	}{
-		{
-			name:       "CAMP_ROOT set takes priority",
-			campRoot:   "/explicit/campaign/root",
-			wantEnvVal: true,
-		},
-		{
-			name:       "CAMP_ROOT empty falls back to cwd",
-			campRoot:   "",
-			wantEnvVal: false,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("CAMP_ROOT", tc.campRoot)
-
-			got, err := getCampRoot()
-			if err != nil {
-				t.Fatalf("getCampRoot() error: %v", err)
-			}
-
-			if tc.wantEnvVal {
-				if got != tc.campRoot {
-					t.Errorf("getCampRoot() = %q, want env value %q", got, tc.campRoot)
-				}
-			} else {
-				if got == "" {
-					t.Error("getCampRoot() returned empty string on cwd fallback")
-				}
-				if got == tc.campRoot {
-					t.Error("getCampRoot() returned empty CAMP_ROOT instead of cwd")
-				}
-			}
-		})
+	rootCmd.SetArgs([]string{"version"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("walk-up detection failed: %v", err)
 	}
 }
 
