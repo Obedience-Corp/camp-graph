@@ -399,17 +399,25 @@ var renderCmd = &cobra.Command{
 			}
 		}
 
+		// All paths are relative to campaign root for portability.
+		// Resolve --output relative to campaign root if not absolute.
+		resolvedOutput := renderOutput
+		if resolvedOutput != "" && !filepath.IsAbs(resolvedOutput) {
+			resolvedOutput = filepath.Join(cfg.CampRoot, resolvedOutput)
+		}
+
 		// Build the default .campaign/graphs/ filename.
-		graphsDir := filepath.Join(cfg.CampRoot, ".campaign", "graphs")
+		relGraphsDir := filepath.Join(".campaign", "graphs")
 		baseName := "campaign-graph"
 		if renderNode != "" {
 			baseName = "campaign-graph-" + sanitizeNodeID(renderNode)
 		}
-		defaultPath := filepath.Join(graphsDir, baseName+"."+string(format))
+		relDefaultPath := filepath.Join(relGraphsDir, baseName+"."+string(format))
+		absDefaultPath := filepath.Join(cfg.CampRoot, relDefaultPath)
 
 		// Render to --output if specified.
-		if renderOutput != "" {
-			f, err := os.Create(renderOutput)
+		if resolvedOutput != "" {
+			f, err := os.Create(resolvedOutput)
 			if err != nil {
 				return fmt.Errorf("create output file: %w", err)
 			}
@@ -421,18 +429,18 @@ var renderCmd = &cobra.Command{
 		}
 
 		// For DOT with no --output and no --no-save, also write to stdout.
-		if renderOutput == "" && format == render.FormatDOT {
+		if resolvedOutput == "" && format == render.FormatDOT {
 			if err := render.Render(ctx, os.Stdout, g, format); err != nil {
 				return err
 			}
 		}
 
 		// Auto-save to .campaign/graphs/ unless --no-save or --output is set.
-		if !renderNoSave && renderOutput == "" {
-			if err := os.MkdirAll(graphsDir, 0o755); err != nil {
+		if !renderNoSave && resolvedOutput == "" {
+			if err := os.MkdirAll(filepath.Join(cfg.CampRoot, relGraphsDir), 0o755); err != nil {
 				return fmt.Errorf("create graphs directory: %w", err)
 			}
-			f, err := os.Create(defaultPath)
+			f, err := os.Create(absDefaultPath)
 			if err != nil {
 				return fmt.Errorf("create graphs file: %w", err)
 			}
@@ -440,19 +448,19 @@ var renderCmd = &cobra.Command{
 			if err := render.Render(ctx, f, g, format); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "Saved to %s\n", defaultPath)
+			fmt.Fprintf(os.Stderr, "Saved to %s\n", relDefaultPath)
 		}
 
 		// For non-DOT with no file destination, there's nowhere to write.
-		if renderOutput == "" && renderNoSave && format != render.FormatDOT {
+		if resolvedOutput == "" && renderNoSave && format != render.FormatDOT {
 			return fmt.Errorf("format %q requires a file output; use --output or remove --no-save", format)
 		}
 
 		// Open the file if requested.
 		if renderOpen {
-			target := defaultPath
-			if renderOutput != "" {
-				target = renderOutput
+			target := absDefaultPath
+			if resolvedOutput != "" {
+				target = resolvedOutput
 			}
 			if err := render.OpenFile(target); err != nil {
 				return fmt.Errorf("open file: %w", err)
