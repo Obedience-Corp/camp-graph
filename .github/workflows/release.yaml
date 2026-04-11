@@ -6,11 +6,11 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
-
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,13 +32,9 @@ jobs:
   release:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Fail if the repository is still private
-        if: ${{ github.event.repository.private }}
-        run: |
-          echo "::error::camp-graph must be public before Homebrew and AUR consumers can install release assets."
-          exit 1
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -66,11 +62,9 @@ jobs:
           done
           exit "${missing}"
 
-      - name: Import AUR SSH key
+      - name: Trust AUR host key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
 
       - name: Check GoReleaser config

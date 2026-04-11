@@ -42,7 +42,6 @@ Copy this file set into the new plugin repo:
 - `.github/workflows/release.yaml`
 - `.goreleaser.yaml`
 - `.justfiles/release.just`
-- `install.sh`
 - `scripts/completions.sh`
 - `docs/releasing.md`
 

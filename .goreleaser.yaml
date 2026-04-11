@@ -36,7 +36,6 @@ archives:
     files:
       - README.md
       - LICENSE
-      - install.sh
       - completions/*
 
 aurs:
@@ -74,7 +73,6 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
-      - '^chore:'
 
 homebrew_casks:
   - repository:
@@ -140,4 +138,4 @@ release:
     |----------|---------|
     | Homebrew | `brew install --cask Obedience-Corp/tap/camp-graph` |
     | Arch Linux | `yay -S camp-graph-bin` |
-    | Manual | `curl -fsSL https://raw.githubusercontent.com/Obedience-Corp/camp-graph/main/install.sh | bash` |
+    | Manual | Download the matching archive from GitHub Releases |

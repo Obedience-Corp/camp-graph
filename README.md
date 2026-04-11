@@ -18,11 +18,11 @@ brew install --cask Obedience-Corp/tap/camp-graph
 yay -S camp-graph-bin
 ```
 
-### Manual installer
+### Manual install from GitHub Releases
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Obedience-Corp/camp-graph/main/install.sh | bash
-```
+Download the matching archive from the
+[GitHub Releases page](https://github.com/Obedience-Corp/camp-graph/releases),
+extract `camp-graph`, and place it on your `PATH`.
 
 ### From source
 
