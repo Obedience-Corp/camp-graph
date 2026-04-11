@@ -2,6 +2,9 @@
 bin/
 /camp-graph
 /buildutil
+completions/
+dist/
+out/
 
 # Test coverage files
 coverage.out

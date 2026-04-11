@@ -6,6 +6,26 @@ Builds and visualizes knowledge graphs from campaign artifacts — projects, fes
 
 ## Install
 
+### Homebrew
+
+```bash
+brew install --cask Obedience-Corp/tap/camp-graph
+```
+
+### Arch Linux
+
+```bash
+yay -S camp-graph-bin
+```
+
+### Manual installer
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Obedience-Corp/camp-graph/main/install.sh | bash
+```
+
+### From source
+
 ```bash
 go install github.com/Obedience-Corp/camp-graph/cmd/camp-graph@latest
 ```
@@ -31,9 +51,10 @@ camp graph render --svg       # Static graph image
 ```bash
 just          # Show available commands
 just build    # Build binary
-just test all # Run tests
+just test unit
 just lint     # Format + vet
 just install  # Install to $GOBIN
+just release check
 ```
 
 ## Intent Graph
@@ -72,3 +93,9 @@ Intents appear as nodes with edges to their promoted artifacts. This makes the k
 `camp-graph` is a **separate binary** that plugs into camp via the git-style plugin pattern. When you run `camp graph`, camp discovers `camp-graph` on `$PATH` and delegates to it. Zero coupling, independent release cycles.
 
 See `workflow/explore/knowledge_graph/` in obey-campaign for full research and design docs.
+
+## Release process
+
+Tagged releases publish GitHub assets plus package-manager updates for
+Homebrew and AUR. See [docs/releasing.md](docs/releasing.md) for the
+one-time setup and the reusable pattern for future `camp-*` plugin repos.
