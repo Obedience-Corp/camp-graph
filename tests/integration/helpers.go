@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -156,6 +157,10 @@ func (tc *TestContainer) Cleanup() {
 	}
 }
 
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
 // RunGraph runs the camp-graph command in the container.
 func (tc *TestContainer) RunGraph(args ...string) (string, error) {
 	cmd := append([]string{"/camp-graph"}, args...)
@@ -181,12 +186,34 @@ func (tc *TestContainer) RunGraph(args ...string) (string, error) {
 
 // RunGraphInDir runs camp-graph from a specific directory.
 func (tc *TestContainer) RunGraphInDir(dir string, args ...string) (string, error) {
+	return tc.RunGraphInDirWithEnv(dir, map[string]string{"CAMP_ROOT": dir}, args...)
+}
+
+// RunGraphInDirWithEnv runs camp-graph from a specific directory with explicit env vars.
+func (tc *TestContainer) RunGraphInDirWithEnv(dir string, env map[string]string, args ...string) (string, error) {
 	quotedArgs := make([]string, len(args))
 	for i, arg := range args {
-		escaped := strings.ReplaceAll(arg, "'", "'\"'\"'")
-		quotedArgs[i] = "'" + escaped + "'"
+		quotedArgs[i] = shellQuote(arg)
 	}
-	cmdStr := fmt.Sprintf("cd %s && CAMP_ROOT=%s /camp-graph %s 2>&1", dir, dir, strings.Join(quotedArgs, " "))
+
+	var envParts []string
+	if len(env) > 0 {
+		keys := make([]string, 0, len(env))
+		for k := range env {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			envParts = append(envParts, fmt.Sprintf("%s=%s", k, shellQuote(env[k])))
+		}
+	}
+
+	envPrefix := ""
+	if len(envParts) > 0 {
+		envPrefix = strings.Join(envParts, " ") + " "
+	}
+
+	cmdStr := fmt.Sprintf("cd %s && %s/camp-graph %s 2>&1", shellQuote(dir), envPrefix, strings.Join(quotedArgs, " "))
 	cmd := []string{"sh", "-c", cmdStr}
 
 	exitCode, reader, err := tc.container.Exec(tc.ctx, cmd)
