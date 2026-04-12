@@ -4,6 +4,18 @@
 default:
     @just --list --unsorted --justfile {{source_file()}}
 
+goreleaser := "go run github.com/goreleaser/goreleaser/v2@v2.15.2"
+
+# Validate GoReleaser configuration
+[no-cd]
+check:
+    {{goreleaser}} check
+
+# Build a local snapshot release
+[no-cd]
+snapshot:
+    {{goreleaser}} release --snapshot --clean
+
 # Show current version
 [no-cd]
 version:

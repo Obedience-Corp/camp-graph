@@ -60,6 +60,7 @@ lint: fmt vet
 [no-cd]
 clean: _buildtool
     @{{BUILDTOOL}} clean
+    @rm -rf completions dist out
 
 # Update and tidy dependencies
 [no-cd]
