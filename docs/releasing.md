@@ -21,9 +21,7 @@ The release workflow fails early if either secret is missing.
 ## Release steps
 
 ```bash
-just test unit
-just release tag v0.1.0
-git push origin v0.1.0
+just release stable
 ```
 
 GitHub Actions then:
@@ -33,6 +31,12 @@ GitHub Actions then:
 3. creates the GitHub release
 4. updates `Obedience-Corp/homebrew-tap`
 5. updates the AUR package repo
+
+If you need an explicit version instead of the next computed stable tag:
+
+```bash
+just release tag v0.1.0
+```
 
 ## Reuse for future `camp-*` plugins
 
