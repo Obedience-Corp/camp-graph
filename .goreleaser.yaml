@@ -45,7 +45,7 @@ aurs:
     homepage: "https://github.com/Obedience-Corp/camp-graph"
     description: "Knowledge graph visualization plugin for the camp CLI"
     maintainers:
-      - "Lance Rogers <lance@obediencecorp.com>"
+      - "Obedience Corp <contact@obediencecorp.com>"
     license: "FSL-1.1-ALv2"
     private_key: "{{ .Env.AUR_SSH_KEY }}"
     git_url: "ssh://aur@aur.archlinux.org/camp-graph-bin.git"
