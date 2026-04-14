@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{.Title}}</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #222;
+    --bg: #fafafa;
+    --muted: #666;
+    --border: #ddd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #eee; --bg: #1a1a1a; --muted: #aaa; --border: #333; }
+  }
+  body {
+    margin: 0;
+    padding: 1.5rem 2rem;
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+  }
+  header { margin-bottom: 1rem; }
+  h1 { margin: 0 0 0.25rem 0; font-size: 1.4rem; }
+  .summary { color: var(--muted); font-size: 0.9rem; }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin: 0.75rem 0 1rem;
+    padding: 0.75rem;
+    background: color-mix(in srgb, var(--fg) 3%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .legend-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+  }
+  .swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1.5px solid;
+  }
+  .graph {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.5rem;
+    overflow: auto;
+    background: white;
+  }
+  .graph svg { display: block; max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>{{.Title}}</h1>
+  <div class="summary">{{.Summary}}</div>
+</header>
+{{if .Legend}}
+<section class="legend" aria-label="Node type legend">
+  {{range .Legend}}
+  <span class="legend-entry">
+    <span class="swatch" style="background: {{.FillColor}}; border-color: {{.Color}};"></span>
+    {{.Label}}
+  </span>
+  {{end}}
+</section>
+{{end}}
+<section class="graph" role="img" aria-label="Knowledge graph">
+{{.SVG}}
+</section>
+</body>
+</html>

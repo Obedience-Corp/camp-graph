@@ -3,6 +3,7 @@ package render
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -53,6 +54,56 @@ func TestRenderSVGFormat(t *testing.T) {
 	}
 }
 
+func TestRenderJSONFormat(t *testing.T) {
+	var buf bytes.Buffer
+	ctx := context.Background()
+	g := testGraph()
+
+	if err := Render(ctx, &buf, g, FormatJSON); err != nil {
+		t.Fatalf("Render JSON: %v", err)
+	}
+
+	var envelope struct {
+		Version string           `json:"version"`
+		Nodes   []map[string]any `json:"nodes"`
+		Edges   []map[string]any `json:"edges"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("JSON output is not valid JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	if envelope.Version == "" {
+		t.Error("JSON envelope missing version field")
+	}
+	if len(envelope.Nodes) != 2 {
+		t.Errorf("expected 2 nodes, got %d", len(envelope.Nodes))
+	}
+	if len(envelope.Edges) != 1 {
+		t.Errorf("expected 1 edge, got %d", len(envelope.Edges))
+	}
+
+	// Deterministic output: sorted by ID means project:test precedes festival:test alphabetically.
+	foundProject := false
+	for _, n := range envelope.Nodes {
+		if n["id"] == "project:test" && n["name"] == "test-project" {
+			foundProject = true
+			break
+		}
+	}
+	if !foundProject {
+		t.Error("JSON output missing project:test node with round-tripped fields")
+	}
+
+	// Re-render and compare byte-for-byte for determinism.
+	var buf2 bytes.Buffer
+	if err := Render(ctx, &buf2, g, FormatJSON); err != nil {
+		t.Fatalf("Render JSON (second pass): %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), buf2.Bytes()) {
+		t.Error("JSON output is not deterministic across renders")
+	}
+}
+
 func TestRenderPNGFormat(t *testing.T) {
 	var buf bytes.Buffer
 	ctx := context.Background()
@@ -71,6 +122,47 @@ func TestRenderPNGFormat(t *testing.T) {
 	for i, b := range pngHeader {
 		if data[i] != b {
 			t.Fatalf("PNG header byte %d: got %x, want %x", i, data[i], b)
+		}
+	}
+}
+
+func TestRenderHTMLFormat(t *testing.T) {
+	var buf bytes.Buffer
+	ctx := context.Background()
+	g := testGraph()
+
+	if err := Render(ctx, &buf, g, FormatHTML); err != nil {
+		t.Fatalf("Render HTML: %v", err)
+	}
+
+	out := buf.String()
+	requires := []string{
+		"<!DOCTYPE html>",
+		"<html",
+		"</html>",
+		"<svg",
+		"</svg>",
+		"project:test",   // node ID appears unescaped in SVG <title>
+		"festival:test",  // second node also present
+		"2 node",         // summary reflects node count
+		"1 edge",         // summary reflects edge count
+		"Campaign Graph", // page title
+	}
+	for _, want := range requires {
+		if !strings.Contains(out, want) {
+			t.Errorf("HTML output missing %q", want)
+		}
+	}
+
+	// Must not pull in external scripts or stylesheets.
+	forbidden := []string{
+		"<script src=",
+		"cdn.",
+		`href="http`,
+	}
+	for _, bad := range forbidden {
+		if strings.Contains(out, bad) {
+			t.Errorf("HTML output contains external dep marker %q", bad)
 		}
 	}
 }

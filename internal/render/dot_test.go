@@ -111,7 +111,7 @@ func TestEscDOT(t *testing.T) {
 }
 
 func TestStyleForNode_UnknownType(t *testing.T) {
-	style := styleForNode("unknown_type")
+	style := StyleForNode("unknown_type")
 	if style.Shape != defaultStyle.Shape {
 		t.Errorf("unknown type shape = %q, want %q", style.Shape, defaultStyle.Shape)
 	}
