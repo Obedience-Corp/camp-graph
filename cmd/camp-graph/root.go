@@ -74,7 +74,7 @@ func init() {
 	renderCmd.Flags().StringVar(&renderNode, "node", "", "render only the neighborhood of this node ID")
 	renderCmd.Flags().IntVar(&renderHops, "hops", 2, "neighborhood depth when using --node")
 	renderCmd.Flags().StringVar(&renderDB, "db", "", "path to graph database")
-	renderCmd.Flags().StringVarP(&renderFormat, "format", "f", "dot", "output format: dot, svg, png")
+	renderCmd.Flags().StringVarP(&renderFormat, "format", "f", "dot", "output format: dot, svg, png, json, html")
 	renderCmd.Flags().BoolVar(&renderOpen, "open", false, "open rendered file after writing")
 	renderCmd.Flags().BoolVar(&renderNoSave, "no-save", false, "skip auto-save to .campaign/graphs/")
 
@@ -355,8 +355,8 @@ var browseCmd = &cobra.Command{
 
 var renderCmd = &cobra.Command{
 	Use:   "render",
-	Short: "Render graph as DOT, SVG, or PNG",
-	Long:  "Output the knowledge graph in DOT, SVG, or PNG format.\nBy default, output is also saved to .campaign/graphs/ for easy access.",
+	Short: "Render graph as DOT, SVG, PNG, JSON, or HTML",
+	Long:  "Output the knowledge graph in DOT, SVG, PNG, JSON, or HTML format.\nBy default, output is also saved to .campaign/graphs/ for easy access.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg := ctx.Value(configKey{}).(*Config)
@@ -422,8 +422,8 @@ var renderCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Wrote %s\n", renderOutput)
 		}
 
-		// For DOT with no --output and no --no-save, also write to stdout.
-		if resolvedOutput == "" && format == render.FormatDOT {
+		// For text formats (DOT, JSON) with no --output, also write to stdout so pipelines work.
+		if resolvedOutput == "" && (format == render.FormatDOT || format == render.FormatJSON) {
 			if err := render.Render(ctx, os.Stdout, g, format); err != nil {
 				return err
 			}
@@ -445,8 +445,8 @@ var renderCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Saved to %s\n", relDefaultPath)
 		}
 
-		// For non-DOT with no file destination, there's nowhere to write.
-		if resolvedOutput == "" && renderNoSave && format != render.FormatDOT {
+		// For non-text formats with no file destination, there's nowhere to write.
+		if resolvedOutput == "" && renderNoSave && format != render.FormatDOT && format != render.FormatJSON {
 			return fmt.Errorf("format %q requires a file output; use --output or remove --no-save", format)
 		}
 

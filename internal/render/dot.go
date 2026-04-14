@@ -43,7 +43,7 @@ func RenderDOT(w io.Writer, g *graph.Graph) error {
 	fmt.Fprintln(w)
 
 	for _, n := range g.Nodes() {
-		style := styleForNode(n.Type)
+		style := StyleForNode(n.Type)
 		label := escDOT(n.Name)
 		fmt.Fprintf(w, "  %q [label=%q, shape=%s, color=%q, fillcolor=%q];\n",
 			n.ID, label, style.Shape, style.Color, style.FillColor)
@@ -59,7 +59,10 @@ func RenderDOT(w io.Writer, g *graph.Graph) error {
 	return nil
 }
 
-func styleForNode(t graph.NodeType) NodeStyle {
+// StyleForNode returns the visual style for a node type,
+// falling back to a neutral default for unknown types.
+// Exported so other renderers (e.g. the HTML legend) can share the palette.
+func StyleForNode(t graph.NodeType) NodeStyle {
 	if s, ok := styleMap[t]; ok {
 		return s
 	}

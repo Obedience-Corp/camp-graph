@@ -16,6 +16,11 @@ func TestParseFormat(t *testing.T) {
 		{"SVG", FormatSVG, false},
 		{"png", FormatPNG, false},
 		{"PNG", FormatPNG, false},
+		{"json", FormatJSON, false},
+		{"JSON", FormatJSON, false},
+		{" json ", FormatJSON, false},
+		{"html", FormatHTML, false},
+		{"HTML", FormatHTML, false},
 		{"pdf", "", true},
 		{"", "", true},
 		{"jpeg", "", true},
@@ -37,7 +42,7 @@ func TestParseFormat(t *testing.T) {
 
 func TestValidFormats(t *testing.T) {
 	formats := ValidFormats()
-	if len(formats) != 3 {
-		t.Errorf("ValidFormats() returned %d formats, want 3", len(formats))
+	if len(formats) != 5 {
+		t.Errorf("ValidFormats() returned %d formats, want 5", len(formats))
 	}
 }

@@ -43,7 +43,9 @@ camp graph build              # Build graph from campaign filesystem
 camp graph browse             # TUI graph browser
 camp graph query "auth"       # Search nodes
 camp graph context HF0001     # Show relationships for a festival
-camp graph render --svg       # Static graph image
+camp graph render -f svg      # Static graph image (also: dot, png)
+camp graph render -f json     # Machine-readable export
+camp graph render -f html -o graph.html   # Self-contained browser-viewable page
 ```
 
 ## Development
