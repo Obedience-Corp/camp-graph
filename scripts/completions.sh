@@ -1,15 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p completions
-trap 'rm -f completions/.camp-graph-tmp' EXIT
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+completions_dir="${repo_root}/completions"
+tmp_binary="${completions_dir}/.camp-graph-tmp"
+tmp_campaign="$(mktemp -d)"
+
+cleanup() {
+  rm -f "${tmp_binary}"
+  rm -rf "${tmp_campaign}"
+}
+
+mkdir -p "${completions_dir}"
+mkdir -p "${tmp_campaign}/.campaign"
+trap cleanup EXIT
 
 echo "Building temporary camp-graph binary for completion generation..."
-go build -o completions/.camp-graph-tmp ./cmd/camp-graph
+(
+  cd "${repo_root}"
+  go build -o "${tmp_binary}" ./cmd/camp-graph
+)
 
 echo "Generating completions..."
-./completions/.camp-graph-tmp completion bash > completions/camp-graph.bash
-./completions/.camp-graph-tmp completion zsh > completions/_camp-graph
-./completions/.camp-graph-tmp completion fish > completions/camp-graph.fish
+(
+  cd "${tmp_campaign}"
+  CAMP_ROOT="${tmp_campaign}" "${tmp_binary}" completion bash > "${completions_dir}/camp-graph.bash"
+  CAMP_ROOT="${tmp_campaign}" "${tmp_binary}" completion zsh > "${completions_dir}/_camp-graph"
+  CAMP_ROOT="${tmp_campaign}" "${tmp_binary}" completion fish > "${completions_dir}/camp-graph.fish"
+)
 
-echo "Completions generated in completions/"
+echo "Completions generated in ${completions_dir}/"
