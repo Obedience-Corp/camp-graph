@@ -94,6 +94,13 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 		return nil, graphErrors.Wrap(err, "bridge artifacts to scopes")
 	}
 
+	// Deterministic inference: bounded candidate generation then
+	// aggregation to one inferred edge per pair with evidence reasons.
+	candidates := GenerateCandidates(g, DefaultCandidateBudget())
+	if err := s.aggregateInferredEdges(ctx, g, candidates); err != nil {
+		return nil, graphErrors.Wrap(err, "aggregate inferred edges")
+	}
+
 	// Pass 2: Extract metadata and create relationship edges
 	for _, n := range g.Nodes() {
 		if ctx.Err() != nil {
