@@ -11,15 +11,17 @@ import (
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
 )
 
-// countNonFolderNodes returns the number of nodes that are not folder
-// scope nodes. Many legacy tests assert counts against the artifact-layer
-// model and must not be broken by the addition of scope nodes.
-func countNonFolderNodes(g *graph.Graph) int {
+// countArtifactNodes returns the number of nodes that are neither folder
+// scope nodes nor workspace note nodes. Legacy tests assert counts
+// against the artifact-layer model and must not be broken by the
+// addition of scope or note nodes.
+func countArtifactNodes(g *graph.Graph) int {
 	c := 0
 	for _, n := range g.Nodes() {
-		if n.Type != graph.NodeFolder {
-			c++
+		if n.Type == graph.NodeFolder || n.Type == graph.NodeNote {
+			continue
 		}
+		c++
 	}
 	return c
 }
@@ -147,7 +149,7 @@ func TestScanEmptyCampaign(t *testing.T) {
 	}
 	// An empty campaign still gets a campaign-root scope node so later
 	// passes have a stable anchor; artifact nodes must remain absent.
-	if got := countNonFolderNodes(g); got != 0 {
+	if got := countArtifactNodes(g); got != 0 {
 		t.Errorf("artifact nodes: got %d, want 0", got)
 	}
 }
@@ -183,7 +185,7 @@ func TestScanFilesInProjectsDirSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
 	}
-	if got := countNonFolderNodes(g); got != 1 {
+	if got := countArtifactNodes(g); got != 1 {
 		t.Errorf("artifact nodes: got %d, want 1 (only real-proj)", got)
 	}
 }

@@ -72,6 +72,22 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 		return nil, fmt.Errorf("scan workflow: %w", err)
 	}
 
+	// Emit note nodes for markdown inventory entries that are not owned
+	// by a dedicated artifact scanner. Note creation runs after artifact
+	// scanning so shouldEmitNoteNode can defer to artifact IDs where
+	// they already exist.
+	if err := s.scanNotes(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "scan notes")
+	}
+
+	// Parse explicit references (markdown links, wiki-links, canvas
+	// connections, inline tags, embedded attachments) into explicit
+	// edges. Must run after scanNotes so link targets can be resolved
+	// to note IDs.
+	if err := s.extractExplicitLinks(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "extract explicit links")
+	}
+
 	// Bridge artifact nodes to the scope graph so the two layers share
 	// a single structural spine.
 	if err := s.bridgeArtifactsToScopes(ctx, g); err != nil {

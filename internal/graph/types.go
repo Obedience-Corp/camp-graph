@@ -28,6 +28,21 @@ const (
 	// organizational meaning (a campaign bucket, repo root, or ancestor
 	// of authored files). Scope-kind semantics live in Node.Metadata.
 	NodeFolder NodeType = "folder"
+	// NodeNote represents a markdown note discovered in the workspace.
+	// Notes carry frontmatter fields (aliases, tags, type, status) on
+	// Node.Metadata and use a path-stable ID of the form
+	// "note:<relative-path>".
+	NodeNote NodeType = "note"
+	// NodeCanvas represents an Obsidian-style .canvas file that curates
+	// relationships between other workspace nodes.
+	NodeCanvas NodeType = "canvas"
+	// NodeTag represents a user-authored tag (e.g. #research) that
+	// workspace content shares. ID is "tag:<name>".
+	NodeTag NodeType = "tag"
+	// NodeAttachment represents a non-markdown resource (image, PDF,
+	// etc.) that workspace content references. ID is
+	// "attachment:<relative-path>".
+	NodeAttachment NodeType = "attachment"
 )
 
 // Scope-related metadata keys recorded on Node.Metadata for folder and
@@ -134,10 +149,30 @@ func (t NodeType) String() string {
 		return "package"
 	case NodeFolder:
 		return "folder"
+	case NodeNote:
+		return "note"
+	case NodeCanvas:
+		return "canvas"
+	case NodeTag:
+		return "tag"
+	case NodeAttachment:
+		return "attachment"
 	default:
 		return string(t)
 	}
 }
+
+// Note-related metadata keys recorded on Node.Metadata for NodeNote
+// entries. These are the stable contract for search, browse, and
+// inference passes that consume note metadata.
+const (
+	MetaNoteTitle    = "title"
+	MetaNoteAliases  = "aliases"
+	MetaNoteTags     = "tags"
+	MetaNoteType     = "type"
+	MetaNoteStatus   = "status"
+	MetaGitState     = "git_state"
+)
 
 // String returns the display name for an EdgeType.
 func (t EdgeType) String() string {
