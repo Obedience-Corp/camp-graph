@@ -9,12 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 )
 
 // Scanner walks a campaign directory and produces graph nodes and edges.
 type Scanner struct {
-	root string
+	root             string
+	inventory        *Inventory
+	inventoryOptions InventoryOptions
 }
 
 // New creates a scanner rooted at the given campaign directory.
@@ -22,11 +25,35 @@ func New(root string) *Scanner {
 	return &Scanner{root: root}
 }
 
+// SetInventoryOptions overrides the inventory-build options used by Scan.
+// Intended for tests that supply a custom GitProbe or want to include
+// ignored entries.
+func (s *Scanner) SetInventoryOptions(opts InventoryOptions) {
+	s.inventoryOptions = opts
+}
+
+// Inventory returns the inventory computed by the most recent Scan call,
+// or nil if Scan has not been run.
+func (s *Scanner) Inventory() *Inventory {
+	return s.inventory
+}
+
 // Scan walks the campaign filesystem and returns a populated graph.
+//
+// Before any artifact or content pass runs, Scan builds a shared
+// Inventory containing the campaign-root and nested-repo boundaries and
+// the live-worktree entries inside them so later passes consume a single
+// canonical view of repo scope.
 func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	inv, err := BuildInventory(ctx, s.root, s.inventoryOptions)
+	if err != nil {
+		return nil, graphErrors.Wrap(err, "build inventory")
+	}
+	s.inventory = inv
+
 	g := graph.New()
 
 	if err := s.scanProjects(ctx, g); err != nil {
