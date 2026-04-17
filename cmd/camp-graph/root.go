@@ -7,12 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/render"
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
+	"github.com/Obedience-Corp/camp-graph/internal/search"
 	"github.com/Obedience-Corp/camp-graph/internal/tui"
 	"github.com/Obedience-Corp/camp-graph/internal/version"
 	"github.com/Obedience-Corp/obey-shared/camputil"
@@ -65,7 +67,6 @@ func init() {
 	}
 
 	buildCmd.Flags().StringVar(&outputPath, "output", "", "override database output path")
-	queryCmd.Flags().StringVar(&queryType, "type", "", "filter by node type (project, festival, intent, etc.)")
 	contextCmd.Flags().IntVar(&contextHops, "hops", 2, "neighborhood depth")
 	contextCmd.Flags().BoolVar(&contextDot, "dot", false, "output micrograph as DOT format")
 
@@ -80,7 +81,7 @@ func init() {
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(buildCmd)
-	rootCmd.AddCommand(queryCmd)
+	rootCmd.AddCommand(newQueryCmd())
 	rootCmd.AddCommand(contextCmd)
 	rootCmd.AddCommand(browseCmd)
 	rootCmd.AddCommand(renderCmd)
@@ -152,13 +153,85 @@ var buildCmd = &cobra.Command{
 		}
 		defer store.Close()
 
-		if err := graph.SaveGraph(ctx, store, g); err != nil {
-			return fmt.Errorf("save graph: %w", err)
+		docs := buildSearchDocs(g)
+		meta := graph.BuildMeta{
+			GraphSchemaVersion: search.GraphSchemaVersion,
+			PluginVersion:      version.Version,
+			CampaignRoot:       root,
+			BuiltAt:            time.Now().UTC(),
+			LastRefreshAt:      time.Now().UTC(),
+			LastRefreshMode:    "rebuild",
+			SearchAvailable:    search.FTSAvailable(ctx, store.DB()),
+		}
+		if err := graph.SaveFullBuild(ctx, store, g, docs, meta); err != nil {
+			return fmt.Errorf("save full build: %w", err)
 		}
 
-		fmt.Printf("\nSaved to: %s (%d nodes, %d edges)\n", dbPath, g.NodeCount(), g.EdgeCount())
+		fmt.Printf("\nSaved to: %s (%d nodes, %d edges, %d search docs)\n",
+			dbPath, g.NodeCount(), g.EdgeCount(), len(docs))
 		return nil
 	},
+}
+
+// buildSearchDocs converts notes (and other indexable nodes) to
+// DocumentRecord values consumed by graph.SaveFullBuild. For the first
+// iteration this indexes note nodes only. Artifact indexing can extend
+// the function without touching the save pipeline.
+func buildSearchDocs(g *graph.Graph) []graph.DocumentRecord {
+	var docs []graph.DocumentRecord
+	for _, n := range g.Nodes() {
+		if n.Type != graph.NodeNote {
+			continue
+		}
+		body, _ := os.ReadFile(n.Path)
+		doc := graph.DocumentRecord{
+			NodeID:       n.ID,
+			Title:        firstNonEmpty(n.Metadata[graph.MetaNoteTitle], n.Name),
+			RelPath:      n.Name,
+			Scope:        inferScopeFromRel(n.Name),
+			Body:         string(body),
+			Aliases:      splitCommaList(n.Metadata[graph.MetaNoteAliases]),
+			Tags:         splitCommaList(n.Metadata[graph.MetaNoteTags]),
+			TrackedState: firstNonEmpty(n.Metadata[graph.MetaGitState], "unknown"),
+			UpdatedAt:    n.UpdatedAt,
+		}
+		docs = append(docs, doc)
+	}
+	return docs
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func splitCommaList(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// inferScopeFromRel returns the immediate parent folder path as the
+// scope label shown in results. The campaign root maps to "." so the
+// scope column is never empty.
+func inferScopeFromRel(rel string) string {
+	rel = filepath.ToSlash(rel)
+	idx := strings.LastIndex(rel, "/")
+	if idx < 0 {
+		return "."
+	}
+	return rel[:idx]
 }
 
 // printScanSummary displays node counts by type.
@@ -177,55 +250,6 @@ func printScanSummary(g *graph.Graph) {
 	fmt.Printf("\n  Edges: %d\n", g.EdgeCount())
 }
 
-var queryCmd = &cobra.Command{
-	Use:   "query <term>",
-	Short: "Search across all graph nodes",
-	Args:  cobra.MinimumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		cfg := ctx.Value(configKey{}).(*Config)
-		dbPath := filepath.Join(cfg.CampRoot, ".campaign", "graph.db")
-
-		store, err := graph.OpenStore(ctx, dbPath)
-		if err != nil {
-			return fmt.Errorf("open store (run 'camp-graph build' first): %w", err)
-		}
-		defer store.Close()
-
-		g, err := graph.LoadGraph(ctx, store)
-		if err != nil {
-			return fmt.Errorf("load graph: %w", err)
-		}
-
-		term := strings.ToLower(args[0])
-		var matches []*graph.Node
-		for _, n := range g.Nodes() {
-			if queryType != "" && string(n.Type) != queryType {
-				continue
-			}
-			if strings.Contains(strings.ToLower(n.Name), term) ||
-				strings.Contains(strings.ToLower(n.ID), term) {
-				matches = append(matches, n)
-			}
-		}
-
-		if len(matches) == 0 {
-			fmt.Println("No matches found.")
-			return nil
-		}
-
-		for _, n := range matches {
-			tag := strings.ToUpper(string(n.Type)[:3])
-			status := ""
-			if n.Status != "" {
-				status = fmt.Sprintf("  (%s)", n.Status)
-			}
-			fmt.Printf("  [%s] %-40s %s%s\n", tag, n.ID, n.Path, status)
-		}
-		fmt.Printf("\n%d result(s)\n", len(matches))
-		return nil
-	},
-}
 
 var contextCmd = &cobra.Command{
 	Use:   "context <id-or-name>",

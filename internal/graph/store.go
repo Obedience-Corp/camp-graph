@@ -42,6 +42,52 @@ CREATE TABLE IF NOT EXISTS edges (
 CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_id);
 CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_id);
 CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(type);
+
+CREATE TABLE IF NOT EXISTS graph_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS indexed_files (
+    rel_path TEXT PRIMARY KEY,
+    repo_root TEXT NOT NULL,
+    node_id TEXT,
+    tracked_state TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    mtime_ns INTEGER NOT NULL,
+    parser_kind TEXT NOT NULL,
+    scope_id TEXT,
+    indexed_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_indexed_files_repo_root ON indexed_files(repo_root);
+CREATE INDEX IF NOT EXISTS idx_indexed_files_scope_id ON indexed_files(scope_id);
+
+CREATE TABLE IF NOT EXISTS search_docs (
+    rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id TEXT NOT NULL UNIQUE REFERENCES nodes(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    rel_path TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    body TEXT NOT NULL,
+    summary TEXT NOT NULL DEFAULT '',
+    aliases TEXT NOT NULL DEFAULT '[]',
+    tags TEXT NOT NULL DEFAULT '[]',
+    tracked_state TEXT NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_search_docs_rel_path ON search_docs(rel_path);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS search_docs_fts USING fts5(
+    title,
+    rel_path,
+    scope,
+    body,
+    summary,
+    aliases,
+    tags,
+    content='search_docs',
+    content_rowid='rowid'
+);
 `
 
 // OpenStore opens or creates a SQLite database at path and ensures tables exist.
@@ -170,6 +216,57 @@ func (s *Store) DeleteAll(ctx context.Context) error {
 		return fmt.Errorf("delete nodes: %w", err)
 	}
 	return nil
+}
+
+// DB returns the underlying *sql.DB for packages that need to issue
+// their own queries (for example, the search package). Callers must not
+// close the returned handle; Store.Close remains the owner.
+func (s *Store) DB() *sql.DB {
+	return s.db
+}
+
+// SetMeta inserts or replaces a graph_meta key/value pair.
+func (s *Store) SetMeta(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT OR REPLACE INTO graph_meta (key, value) VALUES (?, ?)`,
+		key, value,
+	)
+	if err != nil {
+		return fmt.Errorf("set meta %s: %w", key, err)
+	}
+	return nil
+}
+
+// GetMeta returns the value for key, or "" if the key is absent.
+func (s *Store) GetMeta(ctx context.Context, key string) (string, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT value FROM graph_meta WHERE key = ?`, key)
+	var value string
+	err := row.Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get meta %s: %w", key, err)
+	}
+	return value, nil
+}
+
+// AllMeta returns every graph_meta row as a map.
+func (s *Store) AllMeta(ctx context.Context) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT key, value FROM graph_meta`)
+	if err != nil {
+		return nil, fmt.Errorf("query graph_meta: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, fmt.Errorf("scan graph_meta: %w", err)
+		}
+		out[k] = v
+	}
+	return out, rows.Err()
 }
 
 // scanNodes is a helper that scans rows into Node slices.
