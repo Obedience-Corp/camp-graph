@@ -89,6 +89,8 @@ func init() {
 	rootCmd.AddCommand(contextCmd)
 	rootCmd.AddCommand(browseCmd)
 	rootCmd.AddCommand(renderCmd)
+	rootCmd.AddCommand(newRefreshCmd())
+	rootCmd.AddCommand(newStatusCmd())
 }
 
 var (
