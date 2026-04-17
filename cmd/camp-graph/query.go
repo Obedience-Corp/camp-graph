@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
 	"github.com/spf13/cobra"
@@ -47,18 +48,18 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	cfg := ctx.Value(configKey{}).(*Config)
 
 	if queryTracked && queryUntracked {
-		return fmt.Errorf("--tracked and --untracked are mutually exclusive")
+		return graphErrors.New("--tracked and --untracked are mutually exclusive")
 	}
 
 	dbPath := filepath.Join(cfg.CampRoot, ".campaign", "graph.db")
 	store, err := graph.OpenStore(ctx, dbPath)
 	if err != nil {
-		return fmt.Errorf("open store (run 'camp-graph build' first): %w", err)
+		return graphErrors.Wrap(err, "open store (run 'camp-graph build' first)")
 	}
 	defer store.Close()
 
 	if !search.FTSAvailable(ctx, store.DB()) {
-		return fmt.Errorf("search (FTS5) is unavailable on this database; run 'camp-graph build' to regenerate")
+		return graphErrors.New("search (FTS5) is unavailable on this database; run 'camp-graph build' to regenerate")
 	}
 
 	opts := search.QueryOptions{
@@ -74,7 +75,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	querier := search.NewQuerier(store.DB())
 	results, err := querier.Search(ctx, opts)
 	if err != nil {
-		return fmt.Errorf("query: %w", err)
+		return graphErrors.Wrap(err, "query")
 	}
 
 	if queryJSON {

@@ -9,23 +9,11 @@ import (
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/runtime"
-	"github.com/Obedience-Corp/camp-graph/internal/scanner"
 )
 
-// fileDiff helpers exercise the rel-path diff logic directly.
-type fileDiffCase struct {
-	name         string
-	inv          *scanner.Inventory
-	prior        map[string]runtime.IndexedFile
-	wantAdded    int
-	wantDeleted  int
-	wantChanged  int
-	mutateOnDisk func(t *testing.T)
-}
-
-// TestDiffInventory_MissingStateAllAdded is handled by the full
-// refresh tests below because diffInventory is unexported. Instead
-// we rely on the Refresh end-to-end path to exercise classification.
+// diffInventory is unexported, so the add/change/delete classification
+// is exercised end-to-end through the Refresh tests below rather than
+// directly.
 
 func TestRefresh_FreshDBForcesRebuild(t *testing.T) {
 	ctx := context.Background()
@@ -249,5 +237,64 @@ func TestRefresh_ParityWithClearRebuild(t *testing.T) {
 	}
 	if reportA.EdgesWritten != reportB.EdgesWritten {
 		t.Errorf("edges parity: rebuild=%d refresh=%d", reportA.EdgesWritten, reportB.EdgesWritten)
+	}
+}
+
+// TestRefresh_NoChangesSkipsFullRebuild proves that a second refresh
+// with no filesystem mutations takes the no-op fast path: reindexed
+// and deleted stay at zero, the last_refresh_mode is "refresh", and
+// the call completes without rewriting node/edge rows.
+func TestRefresh_NoChangesSkipsFullRebuild(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "Work"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Work", "plan.md"), []byte("# plan\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	dbPath := filepath.Join(t.TempDir(), "graph.db")
+	store, err := graph.OpenStore(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer store.Close()
+
+	buildMeta := func(mode runtime.RefreshMode, _ time.Time, searchAvailable bool) graph.BuildMeta {
+		return graph.BuildMeta{
+			GraphSchemaVersion: "graphdb/v2alpha1",
+			CampaignRoot:       root,
+			SearchAvailable:    searchAvailable,
+		}
+	}
+	req := runtime.RefreshRequest{
+		CampaignRoot: root, DBPath: dbPath, Store: store,
+		BuildDocs:   func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildMetaFn: buildMeta,
+	}
+
+	// First run: rebuild.
+	if _, err := runtime.Refresh(ctx, req); err != nil {
+		t.Fatalf("first refresh: %v", err)
+	}
+	// Second run without mutation: fast path.
+	report, err := runtime.Refresh(ctx, req)
+	if err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+	if report.Mode != runtime.ModeRefresh {
+		t.Errorf("mode: got %q, want refresh", report.Mode)
+	}
+	if report.ReindexedFiles != 0 || report.DeletedFiles != 0 {
+		t.Errorf("no-op path: reindexed=%d deleted=%d; want 0/0",
+			report.ReindexedFiles, report.DeletedFiles)
+	}
+	mode, err := store.GetMeta(ctx, "last_refresh_mode")
+	if err != nil {
+		t.Fatalf("get meta: %v", err)
+	}
+	if mode != "refresh" {
+		t.Errorf("last_refresh_mode: got %q, want refresh", mode)
 	}
 }

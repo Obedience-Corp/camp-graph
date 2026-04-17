@@ -35,20 +35,24 @@ camp-graph status --json
 
 | Command | Wall Time |
 | ------- | --------- |
-| Initial `build` (13,143 nodes, 4,332 search docs, 19,758 edges) | 4.28 s |
+| Initial `build` (13,143 nodes, 4,332 search docs, 18,894 indexed files, 19,758 edges) | 7.45 s |
 | Warm `query "JobSearch" --scope "Work/JobSearch" --limit 10 --json` | 0.021 s |
 | `related --path "Work/JobSearch/Action Plan.md" --limit 10 --json` | 0.030 s |
+| `refresh --json` (no-op fast path when inventory diff is empty) | sub-100 ms (unit-tested) |
 
 All timings are well within the responsiveness bar implied by the
-release design.
+release design. The build path now performs SHA-256 fingerprinting
+on every worktree file so `indexed_files` is accurate immediately
+after `build`; the extra ~3 s vs. the pre-fingerprint run is worth
+the correctness gain.
 
 ## Notes
 
-- `status --json` reports `indexed_files: 0` after an initial build
-  because the full-build path does not populate the
-  `indexed_files` table yet; `refresh` populates it on the second run.
-  This is documented as follow-up work; the build still produces a
-  coherent graph DB with `graph_meta`, `search_docs`, and
-  `search_docs_fts` populated.
+- `status --json` reports `indexed_files: 18894` immediately after
+  `build`. Fingerprint rows are now written in the same transaction
+  as nodes, edges, search_docs, and graph_meta.
+- `refresh` takes a no-op fast path when the inventory diff reports
+  zero added/changed/deleted files: it updates only `last_refresh_at`
+  and `last_refresh_mode`, avoiding the SaveFullBuild rewrite.
 - Ranking ordering matches the contract: `same_scope` items surface
   before cross-scope lexical hits in the related output.

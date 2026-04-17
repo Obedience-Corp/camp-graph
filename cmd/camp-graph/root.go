@@ -11,8 +11,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/render"
+	"github.com/Obedience-Corp/camp-graph/internal/runtime"
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
 	"github.com/Obedience-Corp/camp-graph/internal/tui"
@@ -137,7 +139,7 @@ var buildCmd = &cobra.Command{
 		root := cfg.CampRoot
 
 		if _, err := os.Stat(filepath.Join(root, "projects")); os.IsNotExist(err) {
-			return fmt.Errorf("%s does not appear to be a campaign (no projects/ directory)", root)
+			return graphErrors.New(root + " does not appear to be a campaign (no projects/ directory)")
 		}
 
 		fmt.Printf("Building graph from: %s\n\n", root)
@@ -146,7 +148,7 @@ var buildCmd = &cobra.Command{
 		sc := scanner.New(root)
 		g, err := sc.Scan(ctx)
 		if err != nil {
-			return fmt.Errorf("scan failed: %w", err)
+			return graphErrors.Wrap(err, "scan failed")
 		}
 		printScanSummary(g)
 
@@ -155,31 +157,33 @@ var buildCmd = &cobra.Command{
 			dbPath = filepath.Join(root, ".campaign", "graph.db")
 		}
 		if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-			return fmt.Errorf("create directory for %s: %w", dbPath, err)
+			return graphErrors.Wrapf(err, "create directory for %s", dbPath)
 		}
 
 		store, err := graph.OpenStore(ctx, dbPath)
 		if err != nil {
-			return fmt.Errorf("open store: %w", err)
+			return graphErrors.Wrap(err, "open store")
 		}
 		defer store.Close()
 
 		docs := buildSearchDocs(g)
+		now := time.Now().UTC()
 		meta := graph.BuildMeta{
 			GraphSchemaVersion: search.GraphSchemaVersion,
 			PluginVersion:      version.Version,
 			CampaignRoot:       root,
-			BuiltAt:            time.Now().UTC(),
-			LastRefreshAt:      time.Now().UTC(),
+			BuiltAt:            now,
+			LastRefreshAt:      now,
 			LastRefreshMode:    "rebuild",
 			SearchAvailable:    search.FTSAvailable(ctx, store.DB()),
 		}
-		if err := graph.SaveFullBuild(ctx, store, g, docs, meta); err != nil {
-			return fmt.Errorf("save full build: %w", err)
+		indexed := runtime.BuildIndexedFileRecords(sc.Inventory(), g, now)
+		if err := graph.SaveFullBuildWithIndex(ctx, store, g, docs, indexed, meta); err != nil {
+			return graphErrors.Wrap(err, "save full build")
 		}
 
-		fmt.Printf("\nSaved to: %s (%d nodes, %d edges, %d search docs)\n",
-			dbPath, g.NodeCount(), g.EdgeCount(), len(docs))
+		fmt.Printf("\nSaved to: %s (%d nodes, %d edges, %d search docs, %d indexed files)\n",
+			dbPath, g.NodeCount(), g.EdgeCount(), len(docs), len(indexed))
 		return nil
 	},
 }
@@ -430,7 +434,7 @@ var renderCmd = &cobra.Command{
 		}
 
 		if renderTracked && renderUntracked {
-			return fmt.Errorf("--tracked and --untracked are mutually exclusive")
+			return graphErrors.New("--tracked and --untracked are mutually exclusive")
 		}
 
 		// --node wins over --scope per contract.

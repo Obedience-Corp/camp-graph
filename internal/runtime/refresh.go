@@ -48,11 +48,19 @@ type RefreshRequest struct {
 }
 
 // Refresh runs the refresh flow. It rebuilds the inventory, diffs
-// against indexed_files, and either rebuilds the DB or performs a
-// targeted recompute. In the first implementation the targeted path
-// falls back to a full rebuild but still reports accurate add/change/
-// delete counts so clients see the real amount of work done and
-// indexed_files stays consistent for future truly-incremental passes.
+// against indexed_files, and chooses between three paths:
+//
+//  1. ModeRebuild: preconditions fail (fresh DB, schema mismatch,
+//     empty graph). Full rebuild via SaveFullBuildWithIndex.
+//  2. ModeRefresh with zero changes: a no-op fast path that only
+//     updates graph_meta. No nodes, edges, search_docs, or
+//     indexed_files are rewritten. This is the common case when the
+//     user re-runs refresh without touching files.
+//  3. ModeRefresh with changes: a targeted rebuild. The first
+//     implementation rebuilds the full graph because the scanner
+//     operates at repo granularity, but reports accurate
+//     reindexed/deleted counts so clients see the real amount of
+//     work done.
 func Refresh(ctx context.Context, req RefreshRequest) (*RefreshReport, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -61,20 +69,17 @@ func Refresh(ctx context.Context, req RefreshRequest) (*RefreshReport, error) {
 
 	stateStore := NewIndexState(req.Store.DB())
 
-	// Precondition: detect if a rebuild is required.
 	mode, staleBefore, err := decideMode(ctx, req.Store.DB())
 	if err != nil {
 		return nil, err
 	}
 
-	// Scan to get the canonical graph regardless of mode.
 	sc := scanner.New(req.CampaignRoot)
 	g, err := sc.Scan(ctx)
 	if err != nil {
 		return nil, graphErrors.Wrap(err, "scan during refresh")
 	}
 
-	// Diff inventory against the existing indexed_files state.
 	prior, err := stateStore.Load(ctx)
 	if err != nil {
 		return nil, err
@@ -82,24 +87,41 @@ func Refresh(ctx context.Context, req RefreshRequest) (*RefreshReport, error) {
 	inv := sc.Inventory()
 	added, changed, deleted := diffInventory(inv, prior)
 	reindexed := added + changed
-
-	// Build DocumentRecords and BuildMeta for the full SaveFullBuild
-	// path. Callers supply the derivation function so we do not
-	// duplicate CLI-layer logic here.
-	docs := req.BuildDocs(g)
 	searchAvailable := search.FTSAvailable(ctx, req.Store.DB())
+
+	// Fast-path: ModeRefresh with no observed changes updates
+	// last_refresh_at in graph_meta and returns without rewriting any
+	// heavy state. This is the scope-local minimum work the contract
+	// asks for when inventory diff reports zero changes.
+	if mode == ModeRefresh && reindexed == 0 && deleted == 0 {
+		if err := UpdateRefreshMeta(ctx, req.Store.DB(), string(mode), start); err != nil {
+			return nil, graphErrors.Wrap(err, "update refresh meta on no-op path")
+		}
+		nodes, edges, docs := liveCounts(ctx, req.Store.DB())
+		return &RefreshReport{
+			Mode:              mode,
+			ReindexedFiles:    0,
+			DeletedFiles:      0,
+			NodesWritten:      nodes,
+			EdgesWritten:      edges,
+			SearchDocsWritten: docs,
+			DurationMs:        time.Since(start).Milliseconds(),
+			StaleBefore:       staleBefore,
+			StaleAfter:        false,
+		}, nil
+	}
+
+	// Heavy-path: rebuild everything but still report the diff so
+	// clients can see real add/change/delete counts and
+	// indexed_files stays consistent.
+	docs := req.BuildDocs(g)
 	meta := req.BuildMetaFn(mode, start, searchAvailable)
-	if err := graph.SaveFullBuild(ctx, req.Store, g, docs, meta); err != nil {
+	indexed := BuildIndexedFileRecords(inv, g, start)
+	if err := graph.SaveFullBuildWithIndex(ctx, req.Store, g, docs, indexed, meta); err != nil {
 		return nil, graphErrors.Wrap(err, "save full build during refresh")
 	}
 
-	// Populate indexed_files for every inventory entry so subsequent
-	// refresh runs have real fingerprints to diff against.
-	if err := populateIndexedFiles(ctx, stateStore, req.CampaignRoot, inv, g); err != nil {
-		return nil, err
-	}
-
-	report := &RefreshReport{
+	return &RefreshReport{
 		Mode:              mode,
 		ReindexedFiles:    reindexed,
 		DeletedFiles:      deleted,
@@ -109,8 +131,17 @@ func Refresh(ctx context.Context, req RefreshRequest) (*RefreshReport, error) {
 		DurationMs:        time.Since(start).Milliseconds(),
 		StaleBefore:       staleBefore,
 		StaleAfter:        false,
-	}
-	return report, nil
+	}, nil
+}
+
+// liveCounts reads node, edge, and search_docs counts from the DB so
+// the no-op refresh path can report meaningful numbers without
+// rebuilding.
+func liveCounts(ctx context.Context, db *sql.DB) (nodes, edges, docs int) {
+	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM nodes`).Scan(&nodes)
+	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM edges`).Scan(&edges)
+	_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM search_docs`).Scan(&docs)
+	return
 }
 
 // decideMode inspects the database to determine whether refresh can
@@ -175,20 +206,16 @@ func diffInventory(inv *scanner.Inventory, prior map[string]IndexedFile) (added,
 	return
 }
 
-// populateIndexedFiles writes indexed_files rows for every eligible
-// inventory entry. Directory entries are skipped.
-func populateIndexedFiles(
-	ctx context.Context,
-	s *IndexState,
-	campaignRoot string,
-	inv *scanner.Inventory,
-	g *graph.Graph,
-) error {
+// BuildIndexedFileRecords derives IndexedFileRecord rows for every
+// eligible inventory entry. Directory entries are skipped. The
+// resulting slice is written atomically by
+// graph.SaveFullBuildWithIndex alongside nodes, edges, search_docs,
+// and graph_meta.
+func BuildIndexedFileRecords(inv *scanner.Inventory, g *graph.Graph, indexedAt time.Time) []graph.IndexedFileRecord {
 	if inv == nil {
 		return nil
 	}
-	// Collect the nodes owning each rel path. We look up note nodes by
-	// path-stable ID; artifacts can be resolved in later enhancements.
+	out := make([]graph.IndexedFileRecord, 0, len(inv.Entries))
 	for _, e := range inv.Entries {
 		if e.IsDir {
 			continue
@@ -199,23 +226,23 @@ func populateIndexedFiles(
 		noteID := "note:" + e.RelPath
 		if g.Node(noteID) != nil {
 			nodeID = noteID
+		} else if g.Node("file:"+e.RelPath) != nil {
+			nodeID = "file:" + e.RelPath
 		}
-		scopeID := ""
+		scopeID := "folder:."
 		if dir := filepath.Dir(e.RelPath); dir != "." {
 			scopeID = "folder:" + dir
-		} else {
-			scopeID = "folder:."
 		}
-		parser := "markdown"
+		parser := "attachment"
 		switch e.Extension {
 		case "canvas":
 			parser = "canvas"
 		case "md", "markdown", "mdx":
 			parser = "markdown"
-		default:
-			parser = "attachment"
+		case "go":
+			parser = "go"
 		}
-		if err := s.Upsert(ctx, IndexedFile{
+		out = append(out, graph.IndexedFileRecord{
 			RelPath:      e.RelPath,
 			RepoRoot:     e.RepoRoot,
 			NodeID:       nodeID,
@@ -224,10 +251,8 @@ func populateIndexedFiles(
 			MtimeNs:      mt,
 			ParserKind:   parser,
 			ScopeID:      scopeID,
-			IndexedAt:    time.Now().UTC(),
-		}); err != nil {
-			return err
-		}
+			IndexedAt:    indexedAt,
+		})
 	}
-	return nil
+	return out
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/runtime"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
@@ -39,12 +40,12 @@ func runRefresh(cmd *cobra.Command, _ []string) error {
 		dbPath = filepath.Join(cfg.CampRoot, ".campaign", "graph.db")
 	}
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return fmt.Errorf("create dir for %s: %w", dbPath, err)
+		return graphErrors.Wrapf(err, "create dir for %s", dbPath)
 	}
 
 	store, err := graph.OpenStore(ctx, dbPath)
 	if err != nil {
-		return fmt.Errorf("open store: %w", err)
+		return graphErrors.Wrap(err, "open store")
 	}
 	defer store.Close()
 
@@ -70,7 +71,7 @@ func runRefresh(cmd *cobra.Command, _ []string) error {
 
 	report, err := runtime.Refresh(ctx, req)
 	if err != nil {
-		return fmt.Errorf("refresh: %w", err)
+		return graphErrors.Wrap(err, "refresh")
 	}
 
 	if refreshJSON {

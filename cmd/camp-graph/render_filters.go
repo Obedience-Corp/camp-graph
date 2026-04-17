@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 )
 
@@ -18,7 +18,7 @@ func sliceByScope(g *graph.Graph, scope string) (*graph.Graph, error) {
 	}
 	// Accept either folder:<rel> or repo:<rel> as the slice anchor.
 	if g.Node("folder:"+scope) == nil && g.Node("repo:"+scope) == nil {
-		return nil, fmt.Errorf("scope %q not found in graph", scope)
+		return nil, graphErrors.New("scope " + scope + " not found in graph")
 	}
 	prefix := scope + "/"
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/runtime"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
@@ -50,7 +51,7 @@ func runRelated(cmd *cobra.Command, _ []string) error {
 	}
 	store, err := graph.OpenStore(ctx, dbPath)
 	if err != nil {
-		return fmt.Errorf("open store: %w", err)
+		return graphErrors.Wrap(err, "open store")
 	}
 	defer store.Close()
 
@@ -60,7 +61,7 @@ func runRelated(cmd *cobra.Command, _ []string) error {
 		Limit: relatedLimit,
 	})
 	if err != nil {
-		return fmt.Errorf("related: %w", err)
+		return graphErrors.Wrap(err, "related")
 	}
 
 	status, _ := runtime.LoadStatus(ctx, store.DB(), cfg.CampRoot, dbPath)

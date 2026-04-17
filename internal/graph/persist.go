@@ -26,6 +26,23 @@ type DocumentRecord struct {
 	UpdatedAt    time.Time
 }
 
+// IndexedFileRecord mirrors the indexed_files row shape so
+// SaveFullBuild can persist fingerprint state alongside the graph and
+// search tables in one transaction. The runtime package exposes a
+// richer runtime.IndexedFile type; callers convert before invoking
+// SaveFullBuild.
+type IndexedFileRecord struct {
+	RelPath      string
+	RepoRoot     string
+	NodeID       string
+	TrackedState string
+	ContentHash  string
+	MtimeNs      int64
+	ParserKind   string
+	ScopeID      string
+	IndexedAt    time.Time
+}
+
 // BuildMeta captures the graph_meta keys populated on a full build. It
 // mirrors the keys enumerated in the implementation contract.
 type BuildMeta struct {
@@ -38,11 +55,29 @@ type BuildMeta struct {
 	SearchAvailable    bool
 }
 
-// SaveFullBuild writes the graph, graph_meta, and search_docs (plus
-// their FTS mirror) in a single transaction so a build leaves the DB
-// in a coherent state even under concurrent readers. indexed_files is
-// populated elsewhere by the refresh flow; full rebuilds clear it.
+// SaveFullBuild writes the graph, graph_meta, search_docs (plus
+// their FTS mirror), and indexed_files in a single transaction so a
+// build leaves the DB in a coherent state even under concurrent
+// readers. Callers that have indexed_file state to persist pass it in
+// via SaveFullBuildWithIndex; SaveFullBuild keeps the prior
+// zero-index signature for backward compatibility.
 func SaveFullBuild(ctx context.Context, store *Store, g *Graph, docs []DocumentRecord, meta BuildMeta) error {
+	return SaveFullBuildWithIndex(ctx, store, g, docs, nil, meta)
+}
+
+// SaveFullBuildWithIndex is SaveFullBuild plus indexed_files rows.
+// The indexed slice may be nil when a caller has not yet computed
+// fingerprints; refresh and build both pass a populated slice in the
+// normal path so status --json reports accurate indexed_files counts
+// immediately after a rebuild.
+func SaveFullBuildWithIndex(
+	ctx context.Context,
+	store *Store,
+	g *Graph,
+	docs []DocumentRecord,
+	indexed []IndexedFileRecord,
+	meta BuildMeta,
+) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -62,6 +97,9 @@ func SaveFullBuild(ctx context.Context, store *Store, g *Graph, docs []DocumentR
 		return err
 	}
 	if err := writeSearchDocsTx(ctx, tx, docs); err != nil {
+		return err
+	}
+	if err := writeIndexedFilesTx(ctx, tx, indexed); err != nil {
 		return err
 	}
 	if err := writeGraphMetaTx(ctx, tx, meta); err != nil {
@@ -141,19 +179,18 @@ func writeSearchDocsTx(ctx context.Context, tx *sql.Tx, docs []DocumentRecord) e
 		if updatedAt.IsZero() {
 			updatedAt = time.Now().UTC()
 		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO search_docs (node_id, title, rel_path, scope, body, summary, aliases, tags, tracked_state, updated_at)
-	         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			d.NodeID, d.Title, d.RelPath, d.Scope, d.Body, d.Summary,
-			string(aliases), string(tags), d.TrackedState, updatedAt,
-		); err != nil {
-			return fmt.Errorf("insert search_doc %s: %w", d.NodeID, err)
-		}
+		// Use RETURNING rowid to avoid an extra SELECT round-trip; the
+		// rowid is needed to keep the external-content FTS5 mirror in
+		// sync with the logical row.
 		var rowID int64
 		if err := tx.QueryRowContext(ctx,
-			`SELECT rowid FROM search_docs WHERE node_id = ?`, d.NodeID,
+			`INSERT INTO search_docs (node_id, title, rel_path, scope, body, summary, aliases, tags, tracked_state, updated_at)
+	         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	         RETURNING rowid`,
+			d.NodeID, d.Title, d.RelPath, d.Scope, d.Body, d.Summary,
+			string(aliases), string(tags), d.TrackedState, updatedAt,
 		).Scan(&rowID); err != nil {
-			return fmt.Errorf("lookup search_doc rowid for %s: %w", d.NodeID, err)
+			return fmt.Errorf("insert search_doc %s: %w", d.NodeID, err)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO search_docs_fts(rowid, title, rel_path, scope, body, summary, aliases, tags)
@@ -161,6 +198,36 @@ func writeSearchDocsTx(ctx context.Context, tx *sql.Tx, docs []DocumentRecord) e
 			rowID, d.Title, d.RelPath, d.Scope, d.Body, d.Summary, string(aliases), string(tags),
 		); err != nil {
 			return fmt.Errorf("fts insert %s: %w", d.NodeID, err)
+		}
+	}
+	return nil
+}
+
+func writeIndexedFilesTx(ctx context.Context, tx *sql.Tx, indexed []IndexedFileRecord) error {
+	for _, f := range indexed {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		indexedAt := f.IndexedAt
+		if indexedAt.IsZero() {
+			indexedAt = time.Now().UTC()
+		}
+		nodeID := any(nil)
+		if f.NodeID != "" {
+			nodeID = f.NodeID
+		}
+		scopeID := any(nil)
+		if f.ScopeID != "" {
+			scopeID = f.ScopeID
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO indexed_files
+             (rel_path, repo_root, node_id, tracked_state, content_hash, mtime_ns, parser_kind, scope_id, indexed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			f.RelPath, f.RepoRoot, nodeID, f.TrackedState,
+			f.ContentHash, f.MtimeNs, f.ParserKind, scopeID, indexedAt,
+		); err != nil {
+			return fmt.Errorf("insert indexed_file %s: %w", f.RelPath, err)
 		}
 	}
 	return nil

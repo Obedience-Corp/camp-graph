@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/runtime"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
@@ -39,13 +40,13 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 
 	store, err := graph.OpenStore(ctx, dbPath)
 	if err != nil {
-		return fmt.Errorf("open store: %w", err)
+		return graphErrors.Wrap(err, "open store")
 	}
 	defer store.Close()
 
 	status, err := runtime.LoadStatus(ctx, store.DB(), cfg.CampRoot, dbPath)
 	if err != nil {
-		return fmt.Errorf("load status: %w", err)
+		return graphErrors.Wrap(err, "load status")
 	}
 	// Treat FTS as unavailable whenever the virtual table fails so
 	// search_available is always a live observation.
