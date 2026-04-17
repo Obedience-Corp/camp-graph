@@ -43,6 +43,10 @@ const (
 	// etc.) that workspace content references. ID is
 	// "attachment:<relative-path>".
 	NodeAttachment NodeType = "attachment"
+	// NodeRepo represents a nested repository (non-root git boundary,
+	// including submodules) as an explicit graph slice anchor. ID is
+	// "repo:<relative-repo-root>" per the implementation contract.
+	NodeRepo NodeType = "repo"
 )
 
 // Scope-related metadata keys recorded on Node.Metadata for folder and
@@ -157,6 +161,8 @@ func (t NodeType) String() string {
 		return "tag"
 	case NodeAttachment:
 		return "attachment"
+	case NodeRepo:
+		return "repo"
 	default:
 		return string(t)
 	}

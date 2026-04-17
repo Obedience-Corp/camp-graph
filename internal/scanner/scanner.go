@@ -94,6 +94,13 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 		return nil, graphErrors.Wrap(err, "bridge artifacts to scopes")
 	}
 
+	// Code-aware slice extraction: emits NodeFile entries (and Go
+	// NodePackage groupings) for nested repo boundaries only so we
+	// keep code slices from flooding the campaign-root graph.
+	if err := s.extractCodeSlices(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "extract code slices")
+	}
+
 	// Deterministic inference: bounded candidate generation then
 	// aggregation to one inferred edge per pair with evidence reasons.
 	candidates := GenerateCandidates(g, DefaultCandidateBudget())

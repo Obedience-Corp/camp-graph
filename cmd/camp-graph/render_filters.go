@@ -16,8 +16,8 @@ func sliceByScope(g *graph.Graph, scope string) (*graph.Graph, error) {
 	if scope == "" {
 		return g, nil
 	}
-	// Verify the scope exists as a folder node.
-	if g.Node("folder:"+scope) == nil {
+	// Accept either folder:<rel> or repo:<rel> as the slice anchor.
+	if g.Node("folder:"+scope) == nil && g.Node("repo:"+scope) == nil {
 		return nil, fmt.Errorf("scope %q not found in graph", scope)
 	}
 	prefix := scope + "/"

@@ -75,3 +75,10 @@ func newAttachmentNode(relFromRoot, absPath string) *graph.Node {
 func newTagNode(name string) *graph.Node {
 	return graph.NewNode("tag:"+name, graph.NodeTag, name, "")
 }
+
+// newRepoNode creates a repo-slice anchor node. The ID is
+// "repo:<relative-repo-root>" with forward slashes. The campaign root
+// never gets a repo node; use folder:. instead.
+func newRepoNode(relFromRoot, absPath string) *graph.Node {
+	return graph.NewNode("repo:"+relFromRoot, graph.NodeRepo, relFromRoot, absPath)
+}

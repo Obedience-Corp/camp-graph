@@ -149,6 +149,17 @@ func (s *Scanner) scanScopes(ctx context.Context, g *graph.Graph) error {
 			repoRoot:    b.AbsPath,
 			isSubmodule: b.IsSubmodule,
 		}
+		// Emit a separate repo:<rel> slice anchor for nested boundaries.
+		// The campaign root does not get a repo node; folder:. serves
+		// as the root anchor.
+		repoNode := newRepoNode(rel, b.AbsPath)
+		repoNode.Metadata[graph.MetaRepoRoot] = b.AbsPath
+		repoNode.Metadata[graph.MetaScopeKind] = kind
+		repoNode.Metadata[graph.MetaPathDepth] = strconv.Itoa(pathDepth(rel))
+		if b.IsSubmodule {
+			repoNode.Metadata[graph.MetaIsSubmodule] = "true"
+		}
+		g.AddNode(repoNode)
 	}
 
 	// Ancestors of inventory entries. Only directories that actually
@@ -206,6 +217,21 @@ func (s *Scanner) scanScopes(ctx context.Context, g *graph.Graph) error {
 		from := "folder:" + parent
 		to := "folder:" + rel
 		g.AddEdge(graph.NewEdge(from, to, graph.EdgeContains, 1.0, graph.SourceStructural))
+	}
+
+	// Bridge each repo slice anchor to its folder counterpart so
+	// navigation works from either node and slicing by repo:<rel>
+	// still reaches workspace content.
+	for _, b := range inv.Boundaries {
+		if b.RelPath == "." {
+			continue
+		}
+		rel := filepath.ToSlash(b.RelPath)
+		repoID := "repo:" + rel
+		folderID := "folder:" + rel
+		if g.Node(repoID) != nil && g.Node(folderID) != nil {
+			g.AddEdge(graph.NewEdge(repoID, folderID, graph.EdgeContains, 1.0, graph.SourceStructural))
+		}
 	}
 
 	return nil
