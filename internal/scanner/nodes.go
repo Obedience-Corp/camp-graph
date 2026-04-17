@@ -37,3 +37,13 @@ func newDesignDocNode(name, path string) *graph.Node {
 func newExploreDocNode(name, path string) *graph.Node {
 	return graph.NewNode("explore_doc:"+name, graph.NodeExploreDoc, name, path)
 }
+
+// newFolderNode creates a folder scope node. The ID is "folder:<rel>"
+// where rel is the forward-slashed path relative to the campaign root.
+// The campaign root uses "folder:." as its stable ID.
+func newFolderNode(relFromRoot, absPath, scopeKind string) *graph.Node {
+	id := "folder:" + relFromRoot
+	n := graph.NewNode(id, graph.NodeFolder, relFromRoot, absPath)
+	n.Metadata[graph.MetaScopeKind] = scopeKind
+	return n
+}

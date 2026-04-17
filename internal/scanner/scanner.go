@@ -56,6 +56,9 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 
 	g := graph.New()
 
+	if err := s.scanScopes(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "scan scopes")
+	}
 	if err := s.scanProjects(ctx, g); err != nil {
 		return nil, fmt.Errorf("scan projects: %w", err)
 	}
@@ -67,6 +70,12 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 	}
 	if err := s.scanWorkflow(ctx, g); err != nil {
 		return nil, fmt.Errorf("scan workflow: %w", err)
+	}
+
+	// Bridge artifact nodes to the scope graph so the two layers share
+	// a single structural spine.
+	if err := s.bridgeArtifactsToScopes(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "bridge artifacts to scopes")
 	}
 
 	// Pass 2: Extract metadata and create relationship edges

@@ -4,11 +4,25 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
 )
+
+// countNonFolderNodes returns the number of nodes that are not folder
+// scope nodes. Many legacy tests assert counts against the artifact-layer
+// model and must not be broken by the addition of scope nodes.
+func countNonFolderNodes(g *graph.Graph) int {
+	c := 0
+	for _, n := range g.Nodes() {
+		if n.Type != graph.NodeFolder {
+			c++
+		}
+	}
+	return c
+}
 
 // createMinimalCampaign builds a synthetic campaign directory tree for testing.
 func createMinimalCampaign(t *testing.T) string {
@@ -86,15 +100,22 @@ func TestScanMinimalCampaign(t *testing.T) {
 		t.Errorf("explore_docs: got %d, want 1", counts[graph.NodeExploreDoc])
 	}
 
-	// Verify structural edges: festival->phase(1) + phase->seq(1) + seq->task(2) = 4
-	containsCount := 0
+	// Verify artifact-to-artifact structural edges: festival->phase(1) +
+	// phase->seq(1) + seq->task(2) = 4. Folder-scope contains edges are
+	// excluded from this assertion because they belong to the scope
+	// layer, not the artifact layer.
+	artifactContainsCount := 0
 	for _, e := range g.Edges() {
-		if e.Type == graph.EdgeContains {
-			containsCount++
+		if e.Type != graph.EdgeContains {
+			continue
 		}
+		if strings.HasPrefix(e.FromID, "folder:") || strings.HasPrefix(e.ToID, "folder:") {
+			continue
+		}
+		artifactContainsCount++
 	}
-	if containsCount != 4 {
-		t.Errorf("contains edges: got %d, want 4", containsCount)
+	if artifactContainsCount != 4 {
+		t.Errorf("artifact contains edges: got %d, want 4", artifactContainsCount)
 	}
 
 	// Verify festival status
@@ -124,8 +145,10 @@ func TestScanEmptyCampaign(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan() error on empty dir: %v", err)
 	}
-	if len(g.Nodes()) != 0 {
-		t.Errorf("nodes: got %d, want 0", len(g.Nodes()))
+	// An empty campaign still gets a campaign-root scope node so later
+	// passes have a stable anchor; artifact nodes must remain absent.
+	if got := countNonFolderNodes(g); got != 0 {
+		t.Errorf("artifact nodes: got %d, want 0", got)
 	}
 }
 
@@ -160,8 +183,8 @@ func TestScanFilesInProjectsDirSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan() error: %v", err)
 	}
-	if g.NodeCount() != 1 {
-		t.Errorf("nodes: got %d, want 1 (only real-proj)", g.NodeCount())
+	if got := countNonFolderNodes(g); got != 1 {
+		t.Errorf("artifact nodes: got %d, want 1 (only real-proj)", got)
 	}
 }
 
