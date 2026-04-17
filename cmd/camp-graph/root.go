@@ -78,6 +78,10 @@ func init() {
 	renderCmd.Flags().StringVarP(&renderFormat, "format", "f", "dot", "output format: dot, svg, png, json, html")
 	renderCmd.Flags().BoolVar(&renderOpen, "open", false, "open rendered file after writing")
 	renderCmd.Flags().BoolVar(&renderNoSave, "no-save", false, "skip auto-save to .campaign/graphs/")
+	renderCmd.Flags().StringVar(&renderScope, "scope", "", "render only the nodes inside this scope path")
+	renderCmd.Flags().StringVar(&renderMode, "mode", "hybrid", "relation mode: structural|explicit|semantic|hybrid")
+	renderCmd.Flags().BoolVar(&renderTracked, "tracked", false, "only tracked files")
+	renderCmd.Flags().BoolVar(&renderUntracked, "untracked", false, "only untracked files")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(buildCmd)
@@ -88,18 +92,22 @@ func init() {
 }
 
 var (
-	outputPath   string
-	queryType    string
-	contextHops  int
-	contextDot   bool
-	browsePath   string
-	renderOutput string
-	renderNode   string
-	renderHops   int
-	renderDB     string
-	renderFormat string
-	renderOpen   bool
-	renderNoSave bool
+	outputPath      string
+	queryType       string
+	contextHops     int
+	contextDot      bool
+	browsePath      string
+	renderOutput    string
+	renderNode      string
+	renderHops      int
+	renderDB        string
+	renderFormat    string
+	renderOpen      bool
+	renderNoSave    bool
+	renderScope     string
+	renderMode      string
+	renderTracked   bool
+	renderUntracked bool
 )
 
 // Execute runs the root command.
@@ -272,7 +280,7 @@ var contextCmd = &cobra.Command{
 			return fmt.Errorf("load graph: %w", err)
 		}
 
-		target := resolveNode(g, args[0])
+		target := resolveNodeDB(ctx, store, g, args[0])
 		if target == nil {
 			return fmt.Errorf("node %q not found\nTry: camp-graph query %s", args[0], args[0])
 		}
@@ -288,20 +296,28 @@ var contextCmd = &cobra.Command{
 	},
 }
 
-// resolveNode finds a node by exact ID or fuzzy name match.
-func resolveNode(g *graph.Graph, query string) *graph.Node {
+// resolveNodeDB resolves a user-supplied node reference using the
+// retrieval-backed order defined in IMPLEMENTATION_CONTRACTS.md: exact
+// ID, then exact relative path, then top lexical hit. It falls back to
+// an in-memory exact-name match only when the DB resolver returns
+// nothing so callers that pass a bare artifact name (e.g. "alpha")
+// still succeed before we go to search.
+func resolveNodeDB(ctx context.Context, store *graph.Store, g *graph.Graph, query string) *graph.Node {
 	if n := g.Node(query); n != nil {
 		return n
 	}
-	lower := strings.ToLower(query)
-	var matches []*graph.Node
-	for _, n := range g.Nodes() {
-		if strings.Contains(strings.ToLower(n.Name), lower) {
-			matches = append(matches, n)
+	id, _, err := search.Resolve(ctx, store.DB(), query)
+	if err == nil && id != "" {
+		if n := g.Node(id); n != nil {
+			return n
 		}
 	}
-	if len(matches) == 1 {
-		return matches[0]
+	// Exact name fallback for artifacts whose IDs embed the name
+	// (e.g. project:alpha from "alpha"). This keeps legacy CLI UX.
+	for _, n := range g.Nodes() {
+		if n.Name == query {
+			return n
+		}
 	}
 	return nil
 }
@@ -410,11 +426,39 @@ var renderCmd = &cobra.Command{
 			return fmt.Errorf("load graph: %w", err)
 		}
 
-		if renderNode != "" {
-			g = g.Subgraph(renderNode, renderHops)
+		if renderTracked && renderUntracked {
+			return fmt.Errorf("--tracked and --untracked are mutually exclusive")
+		}
+
+		// --node wins over --scope per contract.
+		switch {
+		case renderNode != "":
+			resolved := renderNode
+			if n := resolveNodeDB(ctx, store, g, renderNode); n != nil {
+				resolved = n.ID
+			}
+			g = g.Subgraph(resolved, renderHops)
 			if g.NodeCount() == 0 {
 				return fmt.Errorf("node %q not found in graph", renderNode)
 			}
+		case renderScope != "":
+			sliced, err := sliceByScope(g, renderScope)
+			if err != nil {
+				return err
+			}
+			g = sliced
+		}
+
+		// Apply mode filter on edges then tracked filter on nodes.
+		if m := renderMode; m != "" && m != "hybrid" {
+			g = filterByRelationMode(g, m)
+		}
+		if renderTracked || renderUntracked {
+			state := "tracked"
+			if renderUntracked {
+				state = "untracked"
+			}
+			g = filterByTrackedState(g, state)
 		}
 
 		// All paths are relative to campaign root for portability.
