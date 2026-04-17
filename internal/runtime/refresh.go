@@ -115,21 +115,14 @@ func Refresh(ctx context.Context, req RefreshRequest) (*RefreshReport, error) {
 
 // decideMode inspects the database to determine whether refresh can
 // proceed incrementally or must fall back to a full rebuild. A DB that
-// has no graph_schema_version or one that is incompatible forces
-// ModeRebuild. Presence of any rows plus the current schema version
-// allows ModeRefresh.
+// is Fresh or Incompatible forces ModeRebuild. Matching schema plus a
+// non-empty graph allows ModeRefresh.
 func decideMode(ctx context.Context, db *sql.DB) (RefreshMode, bool, error) {
-	var schema string
-	row := db.QueryRowContext(ctx, `SELECT value FROM graph_meta WHERE key = 'graph_schema_version'`)
-	err := row.Scan(&schema)
-	if err != nil && err != sql.ErrNoRows {
-		return ModeRebuild, true, graphErrors.Wrap(err, "read graph_schema_version")
+	verdict, _, err := CheckCompatibility(ctx, db)
+	if err != nil {
+		return ModeRebuild, true, err
 	}
-	if schema == "" {
-		// Fresh DB - treat as stale and rebuild.
-		return ModeRebuild, true, nil
-	}
-	if schema != search.GraphSchemaVersion {
+	if verdict != CompatMatching {
 		return ModeRebuild, true, nil
 	}
 	// Count nodes; an empty DB means we should rebuild even if schema
