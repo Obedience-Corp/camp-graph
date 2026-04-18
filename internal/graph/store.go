@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 
 	_ "modernc.org/sqlite"
+
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 )
 
 // Store provides SQLite-backed persistence for graph nodes and edges.
@@ -90,6 +91,32 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_docs_fts USING fts5(
 );
 `
 
+// currentSchemaVersion is the graph_meta.graph_schema_version value
+// the current binary writes when it creates the tables in
+// createTablesSQL. Any DB whose stored version differs from this is
+// considered incompatible and its tables are dropped and recreated
+// before they are used.
+//
+// The graph cache is derived state — a full `camp-graph build`
+// regenerates it from the campaign filesystem — so destroying it on
+// schema drift is strictly preferable to silently running against a
+// stale column layout.
+const currentSchemaVersion = "graphdb/v2alpha1"
+
+// allManagedTables lists every table and virtual table defined in
+// createTablesSQL. DROP order matters: indexes and virtual tables are
+// dropped implicitly with their parent table, so we only list real
+// tables. FTS5 external-content virtual tables must be dropped before
+// their content-table is gone, so search_docs_fts is listed first.
+var allManagedTables = []string{
+	"search_docs_fts",
+	"search_docs",
+	"indexed_files",
+	"graph_meta",
+	"edges",
+	"nodes",
+}
+
 // OpenStore opens or creates a SQLite database at path and ensures tables exist.
 func OpenStore(ctx context.Context, path string) (*Store, error) {
 	if ctx.Err() != nil {
@@ -97,17 +124,80 @@ func OpenStore(ctx context.Context, path string) (*Store, error) {
 	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		return nil, fmt.Errorf("open database %s: %w", path, err)
+		return nil, graphErrors.NewStore("open", path, err)
+	}
+	// Enable foreign-key enforcement so CASCADE declarations actually
+	// fire. modernc/sqlite defaults this to OFF, which silently breaks
+	// the search_docs.node_id -> nodes(id) ON DELETE CASCADE contract.
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=ON"); err != nil {
+		db.Close()
+		return nil, graphErrors.NewStore("pragma foreign_keys", path, err)
 	}
 	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("set WAL mode: %w", err)
+		return nil, graphErrors.NewStore("pragma journal_mode", path, err)
+	}
+	if err := migrateSchemaIfNeeded(ctx, db); err != nil {
+		db.Close()
+		return nil, graphErrors.NewStore("migrate schema", path, err)
 	}
 	if _, err := db.ExecContext(ctx, createTablesSQL); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("create tables: %w", err)
+		return nil, graphErrors.NewStore("create tables", path, err)
 	}
 	return &Store{db: db}, nil
+}
+
+// migrateSchemaIfNeeded reads the persisted graph_schema_version and,
+// when it diverges from currentSchemaVersion, drops every managed
+// table so the subsequent CREATE TABLE IF NOT EXISTS statements
+// install the current schema cleanly.
+//
+// This is why the constant lives in graph rather than runtime: the
+// graph cache is derived state, and OpenStore is the single choke
+// point through which every writer and reader must pass. Doing the
+// drift check here guarantees the schema on disk matches the schema
+// the code expects, regardless of which entry point opened the DB.
+func migrateSchemaIfNeeded(ctx context.Context, db *sql.DB) error {
+	// Detect whether the graph_meta table already exists. If it does
+	// not, the DB is either fresh or was created by a pre-migration
+	// build and we can proceed to CREATE TABLE IF NOT EXISTS directly.
+	var metaExists int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='graph_meta'`,
+	).Scan(&metaExists); err != nil {
+		return graphErrors.Wrap(err, "probe graph_meta table")
+	}
+	if metaExists == 0 {
+		return nil
+	}
+	var version string
+	err := db.QueryRowContext(ctx,
+		`SELECT value FROM graph_meta WHERE key = 'graph_schema_version'`,
+	).Scan(&version)
+	if err != nil && err != sql.ErrNoRows {
+		return graphErrors.Wrap(err, "read graph_schema_version")
+	}
+	if version == "" || version == currentSchemaVersion {
+		return nil
+	}
+	// Schema drift: drop every managed table so CREATE TABLE IF NOT
+	// EXISTS below installs the current layout. The drop is wrapped
+	// in a transaction so a failure mid-way leaves no partial state.
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return graphErrors.Wrap(err, "begin schema-drop tx")
+	}
+	defer tx.Rollback()
+	for _, name := range allManagedTables {
+		if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS "+name); err != nil {
+			return graphErrors.Wrapf(err, "drop %s", name)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return graphErrors.Wrap(err, "commit schema-drop tx")
+	}
+	return nil
 }
 
 // Close closes the underlying database connection.
@@ -119,7 +209,7 @@ func (s *Store) Close() error {
 func (s *Store) InsertNode(ctx context.Context, n *Node) error {
 	metaJSON, err := json.Marshal(n.Metadata)
 	if err != nil {
-		return fmt.Errorf("marshal metadata for %s: %w", n.ID, err)
+		return graphErrors.Wrapf(err, "marshal metadata for %s", n.ID)
 	}
 	_, err = s.db.ExecContext(ctx,
 		`INSERT OR REPLACE INTO nodes (id, type, name, path, status, metadata, created_at, updated_at)
@@ -127,7 +217,7 @@ func (s *Store) InsertNode(ctx context.Context, n *Node) error {
 		n.ID, string(n.Type), n.Name, n.Path, n.Status, string(metaJSON), n.CreatedAt, n.UpdatedAt,
 	)
 	if err != nil {
-		return fmt.Errorf("insert node %s: %w", n.ID, err)
+		return graphErrors.Wrapf(err, "insert node %s", n.ID)
 	}
 	return nil
 }
@@ -140,7 +230,7 @@ func (s *Store) InsertEdge(ctx context.Context, e *Edge) error {
 		e.FromID, e.ToID, string(e.Type), e.Confidence, string(e.Source), e.Subtype, e.Note, e.CreatedAt,
 	)
 	if err != nil {
-		return fmt.Errorf("insert edge %s->%s: %w", e.FromID, e.ToID, err)
+		return graphErrors.Wrapf(err, "insert edge %s->%s", e.FromID, e.ToID)
 	}
 	return nil
 }
@@ -156,11 +246,11 @@ func (s *Store) GetNode(ctx context.Context, id string) (*Node, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("scan node %s: %w", id, err)
+		return nil, graphErrors.Wrapf(err, "scan node %s", id)
 	}
 	if metaJSON != "" {
 		if err := json.Unmarshal([]byte(metaJSON), &n.Metadata); err != nil {
-			return nil, fmt.Errorf("unmarshal metadata for %s: %w", id, err)
+			return nil, graphErrors.Wrapf(err, "unmarshal metadata for %s", id)
 		}
 	}
 	return n, nil
@@ -171,7 +261,7 @@ func (s *Store) GetNodesByType(ctx context.Context, t NodeType) ([]*Node, error)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, type, name, path, status, metadata, created_at, updated_at FROM nodes WHERE type = ?`, string(t))
 	if err != nil {
-		return nil, fmt.Errorf("query nodes by type %s: %w", t, err)
+		return nil, graphErrors.Wrapf(err, "query nodes by type %s", t)
 	}
 	defer rows.Close()
 	return scanNodes(rows)
@@ -182,7 +272,7 @@ func (s *Store) GetAllNodes(ctx context.Context) ([]*Node, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, type, name, path, status, metadata, created_at, updated_at FROM nodes`)
 	if err != nil {
-		return nil, fmt.Errorf("query all nodes: %w", err)
+		return nil, graphErrors.Wrap(err, "query all nodes")
 	}
 	defer rows.Close()
 	return scanNodes(rows)
@@ -193,14 +283,14 @@ func (s *Store) GetAllEdges(ctx context.Context) ([]*Edge, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT from_id, to_id, type, confidence, source, subtype, note, created_at FROM edges`)
 	if err != nil {
-		return nil, fmt.Errorf("query all edges: %w", err)
+		return nil, graphErrors.Wrap(err, "query all edges")
 	}
 	defer rows.Close()
 	var edges []*Edge
 	for rows.Next() {
 		e := &Edge{}
 		if err := rows.Scan(&e.FromID, &e.ToID, &e.Type, &e.Confidence, &e.Source, &e.Subtype, &e.Note, &e.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan edge row: %w", err)
+			return nil, graphErrors.Wrap(err, "scan edge row")
 		}
 		edges = append(edges, e)
 	}
@@ -210,10 +300,10 @@ func (s *Store) GetAllEdges(ctx context.Context) ([]*Edge, error) {
 // DeleteAll removes all nodes and edges from the database.
 func (s *Store) DeleteAll(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM edges"); err != nil {
-		return fmt.Errorf("delete edges: %w", err)
+		return graphErrors.Wrap(err, "delete edges")
 	}
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM nodes"); err != nil {
-		return fmt.Errorf("delete nodes: %w", err)
+		return graphErrors.Wrap(err, "delete nodes")
 	}
 	return nil
 }
@@ -232,7 +322,7 @@ func (s *Store) SetMeta(ctx context.Context, key, value string) error {
 		key, value,
 	)
 	if err != nil {
-		return fmt.Errorf("set meta %s: %w", key, err)
+		return graphErrors.Wrapf(err, "set meta %s", key)
 	}
 	return nil
 }
@@ -246,7 +336,7 @@ func (s *Store) GetMeta(ctx context.Context, key string) (string, error) {
 		return "", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("get meta %s: %w", key, err)
+		return "", graphErrors.Wrapf(err, "get meta %s", key)
 	}
 	return value, nil
 }
@@ -255,14 +345,14 @@ func (s *Store) GetMeta(ctx context.Context, key string) (string, error) {
 func (s *Store) AllMeta(ctx context.Context) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT key, value FROM graph_meta`)
 	if err != nil {
-		return nil, fmt.Errorf("query graph_meta: %w", err)
+		return nil, graphErrors.Wrap(err, "query graph_meta")
 	}
 	defer rows.Close()
 	out := map[string]string{}
 	for rows.Next() {
 		var k, v string
 		if err := rows.Scan(&k, &v); err != nil {
-			return nil, fmt.Errorf("scan graph_meta: %w", err)
+			return nil, graphErrors.Wrap(err, "scan graph_meta")
 		}
 		out[k] = v
 	}
@@ -276,10 +366,12 @@ func scanNodes(rows *sql.Rows) ([]*Node, error) {
 		n := &Node{}
 		var metaJSON string
 		if err := rows.Scan(&n.ID, &n.Type, &n.Name, &n.Path, &n.Status, &metaJSON, &n.CreatedAt, &n.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan node row: %w", err)
+			return nil, graphErrors.Wrap(err, "scan node row")
 		}
 		if metaJSON != "" {
-			json.Unmarshal([]byte(metaJSON), &n.Metadata)
+			if err := json.Unmarshal([]byte(metaJSON), &n.Metadata); err != nil {
+				return nil, graphErrors.Wrapf(err, "unmarshal metadata for %s", n.ID)
+			}
 		}
 		nodes = append(nodes, n)
 	}

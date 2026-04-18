@@ -2,14 +2,15 @@ package scanner
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"gopkg.in/yaml.v3"
+
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
+	"github.com/Obedience-Corp/camp-graph/internal/graph"
 )
 
 // festYAML represents the relevant fields from a fest.yaml file.
@@ -131,11 +132,11 @@ func extractIntentMetadata(_ context.Context, g *graph.Graph, intentID, intentPa
 func parseYAMLFrontmatter(data []byte) (*intentFrontmatter, error) {
 	content := string(data)
 	if !strings.HasPrefix(content, "---\n") {
-		return nil, fmt.Errorf("no frontmatter")
+		return nil, graphErrors.ErrNoFrontmatter
 	}
 	end := strings.Index(content[4:], "\n---")
 	if end < 0 {
-		return nil, fmt.Errorf("no closing frontmatter delimiter")
+		return nil, graphErrors.New("no closing frontmatter delimiter")
 	}
 	var fm intentFrontmatter
 	if err := yaml.Unmarshal([]byte(content[4:4+end]), &fm); err != nil {

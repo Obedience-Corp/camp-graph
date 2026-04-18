@@ -4,7 +4,6 @@ package scanner
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,16 +59,16 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 		return nil, graphErrors.Wrap(err, "scan scopes")
 	}
 	if err := s.scanProjects(ctx, g); err != nil {
-		return nil, fmt.Errorf("scan projects: %w", err)
+		return nil, graphErrors.Wrap(err, "scan projects")
 	}
 	if err := s.scanFestivals(ctx, g); err != nil {
-		return nil, fmt.Errorf("scan festivals: %w", err)
+		return nil, graphErrors.Wrap(err, "scan festivals")
 	}
 	if err := s.scanIntents(ctx, g); err != nil {
-		return nil, fmt.Errorf("scan intents: %w", err)
+		return nil, graphErrors.Wrap(err, "scan intents")
 	}
 	if err := s.scanWorkflow(ctx, g); err != nil {
-		return nil, fmt.Errorf("scan workflow: %w", err)
+		return nil, graphErrors.Wrap(err, "scan workflow")
 	}
 
 	// Emit note nodes for markdown inventory entries that are not owned
@@ -103,7 +102,7 @@ func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 
 	// Deterministic inference: bounded candidate generation then
 	// aggregation to one inferred edge per pair with evidence reasons.
-	candidates := GenerateCandidates(g, DefaultCandidateBudget())
+	candidates := GenerateCandidates(ctx, g, DefaultCandidateBudget())
 	if err := s.aggregateInferredEdges(ctx, g, candidates); err != nil {
 		return nil, graphErrors.Wrap(err, "aggregate inferred edges")
 	}
@@ -132,7 +131,7 @@ func (s *Scanner) scanProjects(ctx context.Context, g *graph.Graph) error {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("read projects dir: %w", err)
+		return graphErrors.Wrap(err, "read projects dir")
 	}
 	for _, e := range entries {
 		if ctx.Err() != nil {
@@ -169,7 +168,7 @@ func (s *Scanner) scanFestivals(ctx context.Context, g *graph.Graph) error {
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("read %s: %w", subdir, err)
+			return graphErrors.Wrapf(err, "read %s", subdir)
 		}
 		for _, e := range entries {
 			if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
@@ -280,7 +279,7 @@ func (s *Scanner) scanIntents(ctx context.Context, g *graph.Graph) error {
 			return ctx.Err()
 		}
 		if err := scanMDFiles(filepath.Join(intentsRoot, status), status); err != nil {
-			return fmt.Errorf("scan intents/%s: %w", status, err)
+			return graphErrors.Wrapf(err, "scan intents/%s", status)
 		}
 	}
 
@@ -291,7 +290,7 @@ func (s *Scanner) scanIntents(ctx context.Context, g *graph.Graph) error {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("read intents/dungeon: %w", err)
+		return graphErrors.Wrap(err, "read intents/dungeon")
 	}
 	for _, de := range dungeonEntries {
 		if ctx.Err() != nil {
@@ -301,7 +300,7 @@ func (s *Scanner) scanIntents(ctx context.Context, g *graph.Graph) error {
 			continue
 		}
 		if err := scanMDFiles(filepath.Join(dungeonDir, de.Name()), de.Name()); err != nil {
-			return fmt.Errorf("scan intents/dungeon/%s: %w", de.Name(), err)
+			return graphErrors.Wrapf(err, "scan intents/dungeon/%s", de.Name())
 		}
 	}
 
@@ -334,10 +333,10 @@ func (s *Scanner) scanWorkflow(ctx context.Context, g *graph.Graph) error {
 	}
 
 	if err := scanDir("design", newDesignDocNode); err != nil {
-		return fmt.Errorf("scan design: %w", err)
+		return graphErrors.Wrap(err, "scan design")
 	}
 	if err := scanDir("explore", newExploreDocNode); err != nil {
-		return fmt.Errorf("scan explore: %w", err)
+		return graphErrors.Wrap(err, "scan explore")
 	}
 	return nil
 }

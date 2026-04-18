@@ -39,7 +39,7 @@ func TestRefresh_FreshDBForcesRebuild(t *testing.T) {
 		CampaignRoot: root,
 		DBPath:       dbPath,
 		Store:        store,
-		BuildDocs:    func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildDocs:    func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn: func(mode runtime.RefreshMode, now time.Time, searchAvailable bool) graph.BuildMeta {
 			return graph.BuildMeta{
 				GraphSchemaVersion: "graphdb/v2alpha1",
@@ -88,7 +88,7 @@ func TestRefresh_SecondRunReportsRefreshMode(t *testing.T) {
 		CampaignRoot: root,
 		DBPath:       dbPath,
 		Store:        store,
-		BuildDocs:    func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildDocs:    func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn:  buildMeta,
 	})
 	if err != nil {
@@ -106,7 +106,7 @@ func TestRefresh_SecondRunReportsRefreshMode(t *testing.T) {
 		CampaignRoot: root,
 		DBPath:       dbPath,
 		Store:        store,
-		BuildDocs:    func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildDocs:    func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn:  buildMeta,
 	})
 	if err != nil {
@@ -153,7 +153,7 @@ func TestRefresh_DeletedFileCounted(t *testing.T) {
 		CampaignRoot: root,
 		DBPath:       dbPath,
 		Store:        store,
-		BuildDocs:    func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildDocs:    func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn:  buildMeta,
 	}
 	if _, err := runtime.Refresh(ctx, req); err != nil {
@@ -202,7 +202,7 @@ func TestRefresh_ParityWithClearRebuild(t *testing.T) {
 	defer storeA.Close()
 	reportA, err := runtime.Refresh(ctx, runtime.RefreshRequest{
 		CampaignRoot: root, DBPath: dbA, Store: storeA,
-		BuildDocs:   func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildDocs:   func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn: buildMeta,
 	})
 	if err != nil {
@@ -218,14 +218,14 @@ func TestRefresh_ParityWithClearRebuild(t *testing.T) {
 	defer storeB.Close()
 	if _, err := runtime.Refresh(ctx, runtime.RefreshRequest{
 		CampaignRoot: root, DBPath: dbB, Store: storeB,
-		BuildDocs:   func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildDocs:   func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn: buildMeta,
 	}); err != nil {
 		t.Fatalf("rebuildB: %v", err)
 	}
 	reportB, err := runtime.Refresh(ctx, runtime.RefreshRequest{
 		CampaignRoot: root, DBPath: dbB, Store: storeB,
-		BuildDocs:   func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildDocs:   func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn: buildMeta,
 	})
 	if err != nil {
@@ -270,7 +270,7 @@ func TestRefresh_NoChangesSkipsFullRebuild(t *testing.T) {
 	}
 	req := runtime.RefreshRequest{
 		CampaignRoot: root, DBPath: dbPath, Store: store,
-		BuildDocs:   func(g *graph.Graph) []graph.DocumentRecord { return nil },
+		BuildDocs:   func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn: buildMeta,
 	}
 

@@ -15,7 +15,7 @@ func TestGenerateCandidates_SameFolder(t *testing.T) {
 	writeFile(t, filepath.Join(root, "Other/c.md"), "# c\n")
 
 	g := scanNotesFixture(t, root)
-	cs := scanner.GenerateCandidates(g, scanner.CandidateBudget{})
+	cs := scanner.GenerateCandidates(t.Context(), g, scanner.CandidateBudget{})
 	// Expect same-folder pair for Work (a,b) but not cross-folder (a,c) or (b,c).
 	same := countSource(cs.Pairs, scanner.CandidateSameFolder)
 	if same < 1 {
@@ -38,7 +38,7 @@ func TestGenerateCandidates_TagPostingList(t *testing.T) {
 	writeFile(t, filepath.Join(root, "C/c.md"), "Body #cooking.\n")
 
 	g := scanNotesFixture(t, root)
-	cs := scanner.GenerateCandidates(g, scanner.CandidateBudget{})
+	cs := scanner.GenerateCandidates(t.Context(), g, scanner.CandidateBudget{})
 
 	tagPairs := 0
 	for _, p := range cs.Pairs {
@@ -62,7 +62,7 @@ func TestGenerateCandidates_FrontmatterType(t *testing.T) {
 	writeFile(t, filepath.Join(root, "C/c.md"), "---\ntype: reference\n---\n# c\n")
 
 	g := scanNotesFixture(t, root)
-	cs := scanner.GenerateCandidates(g, scanner.CandidateBudget{})
+	cs := scanner.GenerateCandidates(t.Context(), g, scanner.CandidateBudget{})
 
 	found := false
 	for _, p := range cs.Pairs {
@@ -83,7 +83,7 @@ func TestGenerateCandidates_BudgetTruncates(t *testing.T) {
 	}
 
 	g := scanNotesFixture(t, root)
-	cs := scanner.GenerateCandidates(g, scanner.CandidateBudget{
+	cs := scanner.GenerateCandidates(t.Context(), g, scanner.CandidateBudget{
 		MaxMembersPerGroup: 4,
 		MaxPairs:           50,
 	})
@@ -108,7 +108,7 @@ func TestGenerateCandidates_NoAllPairsExplosion(t *testing.T) {
 	}
 
 	g := scanNotesFixture(t, root)
-	cs := scanner.GenerateCandidates(g, scanner.CandidateBudget{})
+	cs := scanner.GenerateCandidates(t.Context(), g, scanner.CandidateBudget{})
 
 	// With 20 singleton folders and no shared tags/frontmatter, only
 	// shared_repo_root (all sharing the campaign root) could pair them.
@@ -137,7 +137,7 @@ func TestGenerateCandidates_CountsBySource(t *testing.T) {
 	writeFile(t, filepath.Join(root, "A/y.md"), "---\ntype: daily\n---\n\n# y\n")
 
 	g := scanNotesFixture(t, root)
-	cs := scanner.GenerateCandidates(g, scanner.CandidateBudget{})
+	cs := scanner.GenerateCandidates(t.Context(), g, scanner.CandidateBudget{})
 	if cs.CountsBySource[scanner.CandidateSameFolder] == 0 {
 		t.Error("CountsBySource missing same_folder")
 	}

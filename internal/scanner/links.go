@@ -49,6 +49,13 @@ func (s *Scanner) extractExplicitLinks(ctx context.Context, g *graph.Graph) erro
 	}
 	root := s.inventory.Root
 
+	// Build a case-insensitive basename index once so wiki-link fallback
+	// resolution is O(1) per miss instead of O(N) per miss. Keyed on
+	// lowercased basename without extension; the first note wins on
+	// collisions to keep behaviour deterministic with the previous
+	// linear scan.
+	noteIndex := buildNoteBasenameIndex(g)
+
 	for _, n := range g.Nodes() {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -56,7 +63,7 @@ func (s *Scanner) extractExplicitLinks(ctx context.Context, g *graph.Graph) erro
 		if n.Type != graph.NodeNote {
 			continue
 		}
-		if err := s.extractLinksFromNote(g, root, n); err != nil {
+		if err := s.extractLinksFromNote(g, root, n, noteIndex); err != nil {
 			return err
 		}
 	}
@@ -80,9 +87,30 @@ func (s *Scanner) extractExplicitLinks(ctx context.Context, g *graph.Graph) erro
 	return nil
 }
 
+// buildNoteBasenameIndex returns a map from lowercased basename (minus
+// extension) to the corresponding note node ID. Used by wiki-link
+// resolution to replace the per-miss O(N) g.Nodes() scan.
+func buildNoteBasenameIndex(g *graph.Graph) map[string]string {
+	index := make(map[string]string)
+	for _, n := range g.Nodes() {
+		if n.Type != graph.NodeNote {
+			continue
+		}
+		base := strings.ToLower(strings.TrimSuffix(path.Base(n.Path), path.Ext(n.Path)))
+		if base == "" {
+			continue
+		}
+		if _, exists := index[base]; exists {
+			continue
+		}
+		index[base] = n.ID
+	}
+	return index
+}
+
 // extractLinksFromNote parses one note file and emits link, embed, and
 // tag edges into g.
-func (s *Scanner) extractLinksFromNote(g *graph.Graph, root string, note *graph.Node) error {
+func (s *Scanner) extractLinksFromNote(g *graph.Graph, root string, note *graph.Node, noteIndex map[string]string) error {
 	data, err := os.ReadFile(note.Path)
 	if err != nil {
 		// Missing or unreadable notes should not halt the whole scan;
@@ -94,7 +122,7 @@ func (s *Scanner) extractLinksFromNote(g *graph.Graph, root string, note *graph.
 	body := stripLeadingFrontmatter(string(data))
 
 	s.emitMarkdownLinks(g, root, note, body)
-	s.emitWikiLinks(g, note, body)
+	s.emitWikiLinks(g, note, body, noteIndex)
 	s.emitTags(g, note, body)
 	return nil
 }
@@ -155,7 +183,7 @@ func (s *Scanner) emitMarkdownLinks(g *graph.Graph, root string, note *graph.Nod
 
 // emitWikiLinks finds [[target]] occurrences and emits explicit
 // wiki_link edges if a note with the matching basename exists.
-func (s *Scanner) emitWikiLinks(g *graph.Graph, note *graph.Node, body string) {
+func (s *Scanner) emitWikiLinks(g *graph.Graph, note *graph.Node, body string, noteIndex map[string]string) {
 	matches := wikiLinkRe.FindAllStringSubmatch(body, -1)
 	for _, m := range matches {
 		if len(m) < 2 {
@@ -165,7 +193,7 @@ func (s *Scanner) emitWikiLinks(g *graph.Graph, note *graph.Node, body string) {
 		if target == "" {
 			continue
 		}
-		toID := resolveWikiTargetID(g, target)
+		toID := resolveWikiTargetID(g, target, noteIndex)
 		if toID == "" {
 			continue
 		}
@@ -320,8 +348,9 @@ func resolveTargetID(g *graph.Graph, rel string, _ bool) (string, bool) {
 // directory context or extension) to a note node. Lookup order:
 //  1. exact rel path match
 //  2. basename + .md match against every note node
-//  3. basename match ignoring extension
-func resolveWikiTargetID(g *graph.Graph, target string) string {
+//  3. basename match ignoring extension, using the pre-built
+//     case-insensitive basename index (O(1) per miss).
+func resolveWikiTargetID(g *graph.Graph, target string, noteIndex map[string]string) string {
 	candidates := []string{
 		"note:" + target,
 		"note:" + target + ".md",
@@ -331,16 +360,12 @@ func resolveWikiTargetID(g *graph.Graph, target string) string {
 			return id
 		}
 	}
-	// Fallback: basename scan.
-	targetBase := strings.TrimSuffix(path.Base(target), path.Ext(target))
-	for _, n := range g.Nodes() {
-		if n.Type != graph.NodeNote {
-			continue
-		}
-		baseName := strings.TrimSuffix(path.Base(n.Path), path.Ext(n.Path))
-		if strings.EqualFold(baseName, targetBase) {
-			return n.ID
-		}
+	if noteIndex == nil {
+		return ""
+	}
+	targetBase := strings.ToLower(strings.TrimSuffix(path.Base(target), path.Ext(target)))
+	if id, ok := noteIndex[targetBase]; ok {
+		return id
 	}
 	return ""
 }

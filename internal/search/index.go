@@ -205,9 +205,20 @@ func (idx *Indexer) CountDocuments(ctx context.Context) (int, error) {
 // executing a trivial MATCH against an empty corpus. A non-nil error
 // here means FTS5 is unusable, which per the implementation contract
 // should surface as search_available=false.
+//
+// We use QueryRowContext and discard sql.ErrNoRows because a fresh
+// corpus will legitimately return no rows; the probe is only meant to
+// confirm the query plan compiles and the virtual table is resolvable.
 func FTSAvailable(ctx context.Context, db *sql.DB) bool {
-	_, err := db.ExecContext(ctx, `SELECT rowid FROM search_docs_fts WHERE search_docs_fts MATCH ?`, "noop")
-	return err == nil
+	var rowid int64
+	err := db.QueryRowContext(ctx,
+		`SELECT rowid FROM search_docs_fts WHERE search_docs_fts MATCH ? LIMIT 1`,
+		"noop",
+	).Scan(&rowid)
+	if err == nil || err == sql.ErrNoRows {
+		return true
+	}
+	return false
 }
 
 // encodeStringArray JSON-encodes a slice of strings for TEXT column

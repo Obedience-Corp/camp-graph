@@ -3,11 +3,11 @@ package render
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 
 	graphviz "github.com/goccy/go-graphviz"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 )
 
@@ -16,18 +16,18 @@ import (
 func RenderGraphviz(ctx context.Context, w io.Writer, g *graph.Graph, format Format) error {
 	var dotBuf bytes.Buffer
 	if err := RenderDOT(&dotBuf, g); err != nil {
-		return fmt.Errorf("generate DOT: %w", err)
+		return graphErrors.Wrap(err, "generate DOT")
 	}
 
 	gv, err := graphviz.New(ctx)
 	if err != nil {
-		return fmt.Errorf("init graphviz: %w", err)
+		return graphErrors.Wrap(err, "init graphviz")
 	}
 	defer gv.Close()
 
 	parsed, err := graphviz.ParseBytes(dotBuf.Bytes())
 	if err != nil {
-		return fmt.Errorf("parse DOT: %w", err)
+		return graphErrors.Wrap(err, "parse DOT")
 	}
 	defer parsed.Close()
 
@@ -38,11 +38,11 @@ func RenderGraphviz(ctx context.Context, w io.Writer, g *graph.Graph, format For
 	case FormatPNG:
 		gvFormat = graphviz.PNG
 	default:
-		return fmt.Errorf("graphviz render does not handle format %q", format)
+		return graphErrors.New("graphviz render does not handle format " + string(format))
 	}
 
 	if err := gv.Render(ctx, parsed, gvFormat, w); err != nil {
-		return fmt.Errorf("render %s: %w", format, err)
+		return graphErrors.Wrapf(err, "render %s", format)
 	}
 	return nil
 }

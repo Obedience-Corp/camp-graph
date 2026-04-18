@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"sort"
 	"strings"
 
@@ -84,7 +85,13 @@ func DefaultCandidateBudget() CandidateBudget {
 // each group is further limited by budget.MaxMembersPerGroup so the
 // worst-case cost stays proportional to the sum of (group_size^2)
 // rather than (total_nodes^2).
-func GenerateCandidates(g *graph.Graph, budget CandidateBudget) *CandidateSet {
+//
+// ctx is checked at every posting-list boundary and at every pair
+// emission so a cancelled scan cuts off inference promptly on large
+// vaults. Callers that cannot provide a context may pass
+// context.Background(), but agent-driven flows should propagate their
+// request context to honour cancellation.
+func GenerateCandidates(ctx context.Context, g *graph.Graph, budget CandidateBudget) *CandidateSet {
 	if budget.MaxMembersPerGroup <= 0 {
 		budget.MaxMembersPerGroup = DefaultCandidateBudget().MaxMembersPerGroup
 	}
@@ -96,38 +103,67 @@ func GenerateCandidates(g *graph.Graph, budget CandidateBudget) *CandidateSet {
 		CountsBySource: make(map[CandidateSource]int),
 	}
 
+	// Cancellation is polled at each posting-list boundary and at every
+	// pair emission; on cancel we return what we have so far with
+	// Truncated=true so callers see the partial result rather than an
+	// inconsistent empty one.
+	if ctx.Err() != nil {
+		out.Truncated = true
+		return out
+	}
+
 	// Emit folder-based candidates by walking contains edges from
 	// folder nodes to their immediate note/canvas/attachment children.
-	emitFolderCandidates(g, out, budget)
+	emitFolderCandidates(ctx, g, out, budget)
+	if ctx.Err() != nil {
+		out.Truncated = true
+		return out
+	}
 
 	// Emit shared-ancestor candidates: nodes that share any non-immediate
 	// folder ancestor. We reuse the contains-edge walk.
-	emitSharedAncestorCandidates(g, out, budget)
+	emitSharedAncestorCandidates(ctx, g, out, budget)
+	if ctx.Err() != nil {
+		out.Truncated = true
+		return out
+	}
 
 	// Emit tag posting-list candidates. Notes that reference the same
 	// tag belong to the same posting list.
-	emitTagCandidates(g, out, budget)
+	emitTagCandidates(ctx, g, out, budget)
+	if ctx.Err() != nil {
+		out.Truncated = true
+		return out
+	}
 
 	// Emit frontmatter posting-list candidates using type, status, and
 	// aliases metadata already extracted on note nodes.
-	emitFrontmatterCandidates(g, out, budget)
+	emitFrontmatterCandidates(ctx, g, out, budget)
+	if ctx.Err() != nil {
+		out.Truncated = true
+		return out
+	}
 
 	// Emit repo-root posting-list candidates so content inside the same
 	// nested repo has at least a weak affinity signal.
-	emitRepoRootCandidates(g, out, budget)
+	emitRepoRootCandidates(ctx, g, out, budget)
 
 	return out
 }
 
 // emitFolderCandidates enumerates pairs within each folder scope using
 // the existing folder->child contains edges.
-func emitFolderCandidates(g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
+func emitFolderCandidates(ctx context.Context, g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
 	groups := groupNotesByImmediateFolder(g)
 	for folder, ids := range groups {
+		if ctx.Err() != nil {
+			out.Truncated = true
+			return
+		}
 		if len(ids) < 2 {
 			continue
 		}
-		emitPairsFromGroup(ids, CandidateSameFolder, folder, budget, out)
+		emitPairsFromGroup(ctx, ids, CandidateSameFolder, folder, budget, out)
 		if out.Truncated {
 			return
 		}
@@ -137,13 +173,17 @@ func emitFolderCandidates(g *graph.Graph, out *CandidateSet, budget CandidateBud
 // emitSharedAncestorCandidates enumerates pairs for every non-immediate
 // ancestor scope. Pairs already emitted as same-folder are deduplicated
 // by the caller (CandidateSet tolerates duplicates per source).
-func emitSharedAncestorCandidates(g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
+func emitSharedAncestorCandidates(ctx context.Context, g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
 	byAncestor := groupNotesByAncestor(g)
 	for ancestor, ids := range byAncestor {
+		if ctx.Err() != nil {
+			out.Truncated = true
+			return
+		}
 		if len(ids) < 2 {
 			continue
 		}
-		emitPairsFromGroup(ids, CandidateSharedAncestor, ancestor, budget, out)
+		emitPairsFromGroup(ctx, ids, CandidateSharedAncestor, ancestor, budget, out)
 		if out.Truncated {
 			return
 		}
@@ -152,13 +192,17 @@ func emitSharedAncestorCandidates(g *graph.Graph, out *CandidateSet, budget Cand
 
 // emitTagCandidates enumerates pairs for notes that reference the same
 // tag via inline references or frontmatter tags.
-func emitTagCandidates(g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
+func emitTagCandidates(ctx context.Context, g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
 	groups := groupNotesByTag(g)
 	for tag, ids := range groups {
+		if ctx.Err() != nil {
+			out.Truncated = true
+			return
+		}
 		if len(ids) < 2 {
 			continue
 		}
-		emitPairsFromGroup(ids, CandidateSharedTag, tag, budget, out)
+		emitPairsFromGroup(ctx, ids, CandidateSharedTag, tag, budget, out)
 		if out.Truncated {
 			return
 		}
@@ -167,13 +211,17 @@ func emitTagCandidates(g *graph.Graph, out *CandidateSet, budget CandidateBudget
 
 // emitFrontmatterCandidates groups notes by frontmatter type/status and
 // alias tokens to produce candidate pairs.
-func emitFrontmatterCandidates(g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
+func emitFrontmatterCandidates(ctx context.Context, g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
 	groupings := groupNotesByFrontmatter(g)
 	for value, ids := range groupings {
+		if ctx.Err() != nil {
+			out.Truncated = true
+			return
+		}
 		if len(ids) < 2 {
 			continue
 		}
-		emitPairsFromGroup(ids, CandidateSharedFrontmatter, value, budget, out)
+		emitPairsFromGroup(ctx, ids, CandidateSharedFrontmatter, value, budget, out)
 		if out.Truncated {
 			return
 		}
@@ -183,13 +231,17 @@ func emitFrontmatterCandidates(g *graph.Graph, out *CandidateSet, budget Candida
 // emitRepoRootCandidates emits a weaker affinity signal that couples
 // nodes belonging to the same repo root. Membership uses the metadata
 // recorded on folder and note nodes.
-func emitRepoRootCandidates(g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
+func emitRepoRootCandidates(ctx context.Context, g *graph.Graph, out *CandidateSet, budget CandidateBudget) {
 	groups := groupNotesByRepoRoot(g)
 	for root, ids := range groups {
+		if ctx.Err() != nil {
+			out.Truncated = true
+			return
+		}
 		if len(ids) < 2 {
 			continue
 		}
-		emitPairsFromGroup(ids, CandidateSharedRepoRoot, root, budget, out)
+		emitPairsFromGroup(ctx, ids, CandidateSharedRepoRoot, root, budget, out)
 		if out.Truncated {
 			return
 		}
@@ -198,18 +250,28 @@ func emitRepoRootCandidates(g *graph.Graph, out *CandidateSet, budget CandidateB
 
 // emitPairsFromGroup enumerates all unordered pairs inside ids and
 // appends them to out, respecting both MaxMembersPerGroup and MaxPairs.
-func emitPairsFromGroup(ids []string, source CandidateSource, value string, budget CandidateBudget, out *CandidateSet) {
+// ctx is checked every cancelCheckInterval pairs so a cancelled scan
+// cuts off promptly inside the inner O(n^2) loop without paying the
+// cost of a check on every iteration.
+func emitPairsFromGroup(ctx context.Context, ids []string, source CandidateSource, value string, budget CandidateBudget, out *CandidateSet) {
 	if len(ids) > budget.MaxMembersPerGroup {
 		ids = ids[:budget.MaxMembersPerGroup]
 		out.Truncated = true
 	}
 	sort.Strings(ids)
+	const cancelCheckInterval = 256
+	emitted := 0
 	for i := 0; i < len(ids); i++ {
 		for j := i + 1; j < len(ids); j++ {
 			if len(out.Pairs) >= budget.MaxPairs {
 				out.Truncated = true
 				return
 			}
+			if emitted%cancelCheckInterval == 0 && ctx.Err() != nil {
+				out.Truncated = true
+				return
+			}
+			emitted++
 			out.Pairs = append(out.Pairs, CandidatePair{
 				FromID: ids[i],
 				ToID:   ids[j],

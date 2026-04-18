@@ -1,8 +1,10 @@
 package render
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
+
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 )
 
 // Format represents a supported output format.
@@ -41,6 +43,6 @@ func ParseFormat(s string) (Format, error) {
 	case "html":
 		return FormatHTML, nil
 	default:
-		return "", fmt.Errorf("unsupported format %q (valid: %s)", s, strings.Join(ValidFormats(), ", "))
+		return "", graphErrors.New("unsupported format " + strconv.Quote(s) + " (valid: " + strings.Join(ValidFormats(), ", ") + ")")
 	}
 }

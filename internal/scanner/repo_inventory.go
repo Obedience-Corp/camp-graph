@@ -35,6 +35,16 @@ func DiscoverBoundaries(ctx context.Context, root string) (*Inventory, error) {
 	if err != nil {
 		return nil, graphErrors.Wrapf(err, "resolve root %q", root)
 	}
+	// Resolve symlinks so the root matches the canonical form
+	// filepath.WalkDir produces for descendants. On macOS `/var` resolves
+	// to `/private/var`; without this, the root boundary stores one form
+	// while the walker emits the other, breaking every downstream
+	// rel-path derivation and boundary classification.
+	if resolved, rerr := filepath.EvalSymlinks(absRoot); rerr == nil {
+		absRoot = resolved
+	} else if !os.IsNotExist(rerr) {
+		return nil, graphErrors.Wrapf(rerr, "resolve symlinks for %q", absRoot)
+	}
 	if st, err := os.Stat(absRoot); err != nil {
 		return nil, graphErrors.Wrapf(err, "stat root %q", absRoot)
 	} else if !st.IsDir() {
@@ -113,18 +123,41 @@ func DiscoverBoundaries(ctx context.Context, root string) (*Inventory, error) {
 	return inv, nil
 }
 
-// probeGitMarker returns the absolute path to a .git marker inside dir if
-// one exists. The marker may be a directory (regular repo) or a regular
-// file (submodule worktree or linked worktree gitdir pointer).
+// probeGitMarker returns the absolute path to a .git marker inside dir
+// if one exists AND the marker looks like a real git boundary. The
+// marker may be:
+//   - a directory (regular repo)
+//   - a regular file whose first line begins with "gitdir:" (submodule
+//     worktree or linked worktree pointer)
+//   - a symlink resolving to one of the above
+//
+// Arbitrary files named .git, zero-byte files, and broken symlinks are
+// rejected so boundary discovery does not register noise that would
+// later cause `git ls-files` to fail inside the directory.
 func probeGitMarker(dir string) (string, bool) {
 	marker := filepath.Join(dir, ".git")
-	info, err := os.Lstat(marker)
+	info, err := os.Stat(marker) // Stat follows symlinks.
 	if err != nil {
 		return "", false
 	}
-	// Accept both directories and regular files; symlinks are treated as
-	// present because git follows them when resolving gitdir.
-	_ = info
+	if info.IsDir() {
+		return marker, true
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return "", false
+	}
+	f, err := os.Open(marker)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+	// The gitdir pointer file is always tiny; peek at the first line.
+	buf := make([]byte, 256)
+	n, _ := f.Read(buf)
+	head := strings.TrimSpace(string(buf[:n]))
+	if !strings.HasPrefix(head, "gitdir:") {
+		return "", false
+	}
 	return marker, true
 }
 

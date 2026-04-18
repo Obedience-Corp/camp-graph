@@ -1,9 +1,9 @@
 package graph
 
 import (
-	"fmt"
-
 	libgraph "github.com/dominikbraun/graph"
+
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 )
 
 // ToLibGraph converts the Graph into a dominikbraun/graph directed graph
@@ -12,7 +12,7 @@ func (g *Graph) ToLibGraph() (libgraph.Graph[string, string], error) {
 	lg := libgraph.New(libgraph.StringHash, libgraph.Directed())
 	for _, n := range g.nodes {
 		if err := lg.AddVertex(n.ID); err != nil {
-			return lg, fmt.Errorf("add vertex %s: %w", n.ID, err)
+			return lg, graphErrors.Wrapf(err, "add vertex %s", n.ID)
 		}
 	}
 	for _, e := range g.edges {
@@ -29,11 +29,11 @@ func (g *Graph) ToLibGraph() (libgraph.Graph[string, string], error) {
 func (g *Graph) TopologicalSort() ([]string, error) {
 	lg, err := g.ToLibGraph()
 	if err != nil {
-		return nil, fmt.Errorf("convert to lib graph: %w", err)
+		return nil, graphErrors.Wrap(err, "convert to lib graph")
 	}
 	order, err := libgraph.TopologicalSort(lg)
 	if err != nil {
-		return nil, fmt.Errorf("topological sort: %w", err)
+		return nil, graphErrors.Wrap(err, "topological sort")
 	}
 	return order, nil
 }
@@ -42,11 +42,11 @@ func (g *Graph) TopologicalSort() ([]string, error) {
 func (g *Graph) ShortestPath(from, to string) ([]string, error) {
 	lg, err := g.ToLibGraph()
 	if err != nil {
-		return nil, fmt.Errorf("convert to lib graph: %w", err)
+		return nil, graphErrors.Wrap(err, "convert to lib graph")
 	}
 	path, err := libgraph.ShortestPath(lg, from, to)
 	if err != nil {
-		return nil, fmt.Errorf("shortest path from %s to %s: %w", from, to, err)
+		return nil, graphErrors.Wrapf(err, "shortest path from %s to %s", from, to)
 	}
 	return path, nil
 }

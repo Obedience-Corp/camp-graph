@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"time"
+
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 )
 
 // DocumentRecord is a minimal shape shared with internal/search so that
@@ -83,7 +84,7 @@ func SaveFullBuildWithIndex(
 	}
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin full-build tx: %w", err)
+		return graphErrors.Wrap(err, "begin full-build tx")
 	}
 	defer tx.Rollback()
 
@@ -106,7 +107,7 @@ func SaveFullBuildWithIndex(
 		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit full-build tx: %w", err)
+		return graphErrors.Wrap(err, "commit full-build tx")
 	}
 	return nil
 }
@@ -123,7 +124,7 @@ func wipeBuildState(ctx context.Context, tx *sql.Tx) error {
 	}
 	for _, s := range statements {
 		if _, err := tx.ExecContext(ctx, s); err != nil {
-			return fmt.Errorf("wipe %q: %w", s, err)
+			return graphErrors.Wrapf(err, "wipe %q", s)
 		}
 	}
 	return nil
@@ -134,13 +135,16 @@ func writeNodesTx(ctx context.Context, tx *sql.Tx, g *Graph) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		metaJSON, _ := json.Marshal(n.Metadata)
+		metaJSON, err := json.Marshal(n.Metadata)
+		if err != nil {
+			return graphErrors.Wrapf(err, "marshal metadata for %s", n.ID)
+		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO nodes (id, type, name, path, status, metadata, created_at, updated_at)
 	         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			n.ID, string(n.Type), n.Name, n.Path, n.Status, string(metaJSON), n.CreatedAt, n.UpdatedAt,
 		); err != nil {
-			return fmt.Errorf("insert node %s: %w", n.ID, err)
+			return graphErrors.Wrapf(err, "insert node %s", n.ID)
 		}
 	}
 	return nil
@@ -156,7 +160,7 @@ func writeEdgesTx(ctx context.Context, tx *sql.Tx, g *Graph) error {
 	         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			e.FromID, e.ToID, string(e.Type), e.Confidence, string(e.Source), e.Subtype, e.Note, e.CreatedAt,
 		); err != nil {
-			return fmt.Errorf("insert edge %s->%s: %w", e.FromID, e.ToID, err)
+			return graphErrors.Wrapf(err, "insert edge %s->%s", e.FromID, e.ToID)
 		}
 	}
 	return nil
@@ -169,11 +173,11 @@ func writeSearchDocsTx(ctx context.Context, tx *sql.Tx, docs []DocumentRecord) e
 		}
 		aliases, err := json.Marshal(nonNilStringSlice(d.Aliases))
 		if err != nil {
-			return fmt.Errorf("marshal aliases for %s: %w", d.NodeID, err)
+			return graphErrors.Wrapf(err, "marshal aliases for %s", d.NodeID)
 		}
 		tags, err := json.Marshal(nonNilStringSlice(d.Tags))
 		if err != nil {
-			return fmt.Errorf("marshal tags for %s: %w", d.NodeID, err)
+			return graphErrors.Wrapf(err, "marshal tags for %s", d.NodeID)
 		}
 		updatedAt := d.UpdatedAt
 		if updatedAt.IsZero() {
@@ -190,14 +194,14 @@ func writeSearchDocsTx(ctx context.Context, tx *sql.Tx, docs []DocumentRecord) e
 			d.NodeID, d.Title, d.RelPath, d.Scope, d.Body, d.Summary,
 			string(aliases), string(tags), d.TrackedState, updatedAt,
 		).Scan(&rowID); err != nil {
-			return fmt.Errorf("insert search_doc %s: %w", d.NodeID, err)
+			return graphErrors.Wrapf(err, "insert search_doc %s", d.NodeID)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO search_docs_fts(rowid, title, rel_path, scope, body, summary, aliases, tags)
 	         VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
 			rowID, d.Title, d.RelPath, d.Scope, d.Body, d.Summary, string(aliases), string(tags),
 		); err != nil {
-			return fmt.Errorf("fts insert %s: %w", d.NodeID, err)
+			return graphErrors.Wrapf(err, "fts insert %s", d.NodeID)
 		}
 	}
 	return nil
@@ -227,7 +231,7 @@ func writeIndexedFilesTx(ctx context.Context, tx *sql.Tx, indexed []IndexedFileR
 			f.RelPath, f.RepoRoot, nodeID, f.TrackedState,
 			f.ContentHash, f.MtimeNs, f.ParserKind, scopeID, indexedAt,
 		); err != nil {
-			return fmt.Errorf("insert indexed_file %s: %w", f.RelPath, err)
+			return graphErrors.Wrapf(err, "insert indexed_file %s", f.RelPath)
 		}
 	}
 	return nil
@@ -247,7 +251,7 @@ func writeGraphMetaTx(ctx context.Context, tx *sql.Tx, m BuildMeta) error {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR REPLACE INTO graph_meta (key, value) VALUES (?, ?)`, k, v,
 		); err != nil {
-			return fmt.Errorf("set graph_meta %s: %w", k, err)
+			return graphErrors.Wrapf(err, "set graph_meta %s", k)
 		}
 	}
 	return nil
@@ -282,28 +286,31 @@ func SaveGraph(ctx context.Context, store *Store, g *Graph) error {
 	}
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
+		return graphErrors.Wrap(err, "begin transaction")
 	}
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx, "DELETE FROM edges"); err != nil {
-		return fmt.Errorf("delete edges: %w", err)
+		return graphErrors.Wrap(err, "delete edges")
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM nodes"); err != nil {
-		return fmt.Errorf("delete nodes: %w", err)
+		return graphErrors.Wrap(err, "delete nodes")
 	}
 
 	for _, n := range g.Nodes() {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		metaJSON, _ := json.Marshal(n.Metadata)
+		metaJSON, err := json.Marshal(n.Metadata)
+		if err != nil {
+			return graphErrors.Wrapf(err, "marshal metadata for %s", n.ID)
+		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO nodes (id, type, name, path, status, metadata, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			n.ID, string(n.Type), n.Name, n.Path, n.Status, string(metaJSON), n.CreatedAt, n.UpdatedAt,
 		); err != nil {
-			return fmt.Errorf("insert node %s: %w", n.ID, err)
+			return graphErrors.Wrapf(err, "insert node %s", n.ID)
 		}
 	}
 
@@ -316,12 +323,12 @@ func SaveGraph(ctx context.Context, store *Store, g *Graph) error {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			e.FromID, e.ToID, string(e.Type), e.Confidence, string(e.Source), e.Subtype, e.Note, e.CreatedAt,
 		); err != nil {
-			return fmt.Errorf("insert edge %s->%s: %w", e.FromID, e.ToID, err)
+			return graphErrors.Wrapf(err, "insert edge %s->%s", e.FromID, e.ToID)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+		return graphErrors.Wrap(err, "commit transaction")
 	}
 	return nil
 }
@@ -335,7 +342,7 @@ func LoadGraph(ctx context.Context, store *Store) (*Graph, error) {
 
 	nodes, err := store.GetAllNodes(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("load nodes: %w", err)
+		return nil, graphErrors.Wrap(err, "load nodes")
 	}
 	for _, n := range nodes {
 		g.AddNode(n)
@@ -343,7 +350,7 @@ func LoadGraph(ctx context.Context, store *Store) (*Graph, error) {
 
 	edges, err := store.GetAllEdges(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("load edges: %w", err)
+		return nil, graphErrors.Wrap(err, "load edges")
 	}
 	for _, e := range edges {
 		g.AddEdge(e)

@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"database/sql"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -132,7 +133,72 @@ LIMIT ?`
 	if err := rows.Err(); err != nil {
 		return nil, graphErrors.Wrap(err, "iterate query rows")
 	}
+	applyModeBoost(opts.Mode, results)
 	return results, nil
+}
+
+// applyModeBoost re-weights FTS scores using the query mode so
+// `--mode` has a measurable effect on ranking. Each mode favours a
+// different signal:
+//
+//   - structural: boosts results whose scope matches the requested
+//     --scope filter. Without a --scope filter this mode falls back
+//     to the base FTS score, which is still the right behaviour
+//     (nothing to anchor against).
+//   - explicit: boosts results whose relative path or title contains
+//     the literal query term, i.e. likely targets of explicit links
+//     with the query as a reference.
+//   - semantic: leaves the raw FTS score alone — the bm25 ranking IS
+//     the semantic signal here.
+//   - hybrid (default): applies a modest boost for both scope and
+//     title/path signals so structural anchors and lexical matches
+//     both surface.
+//
+// After re-weighting we re-sort so the boosted ordering actually
+// changes what the caller sees.
+func applyModeBoost(mode QueryMode, results []QueryResult) {
+	if len(results) == 0 {
+		return
+	}
+	const (
+		scopeBoost = 1.5
+		tokenBoost = 1.35
+		hybridBoost = 1.2
+	)
+	for i := range results {
+		r := &results[i]
+		switch mode {
+		case QueryModeStructural:
+			if hasReason(r.Reasons, "same_scope") {
+				r.Score *= scopeBoost
+			}
+		case QueryModeExplicit:
+			if hasReason(r.Reasons, "exact_path_token") || hasReason(r.Reasons, "title_match") {
+				r.Score *= tokenBoost
+			}
+		case QueryModeSemantic:
+			// Raw bm25 score.
+		case QueryModeHybrid, "":
+			if hasReason(r.Reasons, "same_scope") {
+				r.Score *= hybridBoost
+			}
+			if hasReason(r.Reasons, "exact_path_token") || hasReason(r.Reasons, "title_match") {
+				r.Score *= hybridBoost
+			}
+		}
+	}
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+}
+
+func hasReason(reasons []string, want string) bool {
+	for _, r := range reasons {
+		if r == want {
+			return true
+		}
+	}
+	return false
 }
 
 // buildFTSQuery turns a free-text term into a safe FTS5 MATCH

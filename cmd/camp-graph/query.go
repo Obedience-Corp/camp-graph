@@ -14,6 +14,7 @@ import (
 )
 
 var (
+	queryType       string
 	queryScope      string
 	queryPathPrefix string
 	queryMode       string
