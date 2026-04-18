@@ -56,7 +56,7 @@ var buildCmd = &cobra.Command{
 		}
 		defer store.Close()
 
-		docs, err := buildSearchDocs(g)
+		docs, err := buildSearchDocs(root, g)
 		if err != nil {
 			return graphErrors.Wrap(err, "build search docs")
 		}
@@ -81,43 +81,184 @@ var buildCmd = &cobra.Command{
 	},
 }
 
-// buildSearchDocs converts notes (and other indexable nodes) to
-// DocumentRecord values consumed by graph.SaveFullBuild. For the first
-// iteration this indexes note nodes only. Artifact indexing can extend
-// the function without touching the save pipeline.
+// indexableArtifactTypes is the set of non-note node types that are
+// documented as queryable via `camp-graph query --type <t>`. Each gets
+// a search_docs row synthesised from its name, metadata, and — when
+// backed by a concrete file on disk — its contents.
 //
-// A note that vanished between scan and index (permissions changed,
-// file deleted, broken symlink) is skipped with a warning emitted to
-// stderr; other read errors halt the build so operators see real
-// corruption instead of silently empty search documents.
-func buildSearchDocs(g *graph.Graph) ([]graph.DocumentRecord, error) {
+// Kept as a map (rather than a slice) so membership checks are O(1)
+// inside the hot build loop.
+var indexableArtifactTypes = map[graph.NodeType]bool{
+	graph.NodeProject:    true,
+	graph.NodeFestival:   true,
+	graph.NodeChain:      true,
+	graph.NodePhase:      true,
+	graph.NodeSequence:   true,
+	graph.NodeTask:       true,
+	graph.NodeIntent:     true,
+	graph.NodeDesignDoc:  true,
+	graph.NodeExploreDoc: true,
+	// Code-slice nodes emitted by extractCodeSlices inside nested repos.
+	// Indexing them lets `query --type file|package` return matches that
+	// the CLI docs already advertise.
+	graph.NodeFile:    true,
+	graph.NodePackage: true,
+}
+
+// buildSearchDocs converts every indexable node in g into a
+// DocumentRecord consumed by graph.SaveFullBuild. Both notes and
+// artifact nodes (project, festival, intent, phase, sequence, task,
+// design_doc, explore_doc, chain) are emitted so the CLI's
+// `query --type <kind>` surface actually returns matches for each kind
+// it advertises.
+//
+// campRoot is required to derive stable relative paths for nodes whose
+// n.Path is an absolute filesystem path rather than a campaign-root
+// relative one.
+//
+// A document whose source file vanished between scan and index
+// (permissions changed, file deleted, broken symlink) is skipped with
+// a warning on stderr; other read errors halt the build so operators
+// see real corruption instead of silently empty search rows.
+func buildSearchDocs(campRoot string, g *graph.Graph) ([]graph.DocumentRecord, error) {
 	var docs []graph.DocumentRecord
 	for _, n := range g.Nodes() {
-		if n.Type != graph.NodeNote {
-			continue
-		}
-		body, err := os.ReadFile(n.Path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "skip %s: %v\n", n.ID, err)
-				continue
+		switch {
+		case n.Type == graph.NodeNote:
+			doc, skip, err := buildNoteDoc(n)
+			if err != nil {
+				return nil, err
 			}
-			return nil, graphErrors.Wrapf(err, "read note body for %s (%s)", n.ID, n.Path)
+			if !skip {
+				docs = append(docs, doc)
+			}
+		case indexableArtifactTypes[n.Type]:
+			doc, skip, err := buildArtifactDoc(campRoot, n)
+			if err != nil {
+				return nil, err
+			}
+			if !skip {
+				docs = append(docs, doc)
+			}
 		}
-		doc := graph.DocumentRecord{
-			NodeID:       n.ID,
-			Title:        firstNonEmpty(n.Metadata[graph.MetaNoteTitle], n.Name),
-			RelPath:      n.Name,
-			Scope:        inferScopeFromRel(n.Name),
-			Body:         string(body),
-			Aliases:      splitCommaList(n.Metadata[graph.MetaNoteAliases]),
-			Tags:         splitCommaList(n.Metadata[graph.MetaNoteTags]),
-			TrackedState: firstNonEmpty(n.Metadata[graph.MetaGitState], "unknown"),
-			UpdatedAt:    n.UpdatedAt,
-		}
-		docs = append(docs, doc)
 	}
 	return docs, nil
+}
+
+// buildNoteDoc emits the search_docs row for a note node. A skip=true
+// return means the caller should drop the node (vanished file); a
+// non-nil error aborts the whole build.
+func buildNoteDoc(n *graph.Node) (graph.DocumentRecord, bool, error) {
+	body, err := os.ReadFile(n.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "skip %s: %v\n", n.ID, err)
+			return graph.DocumentRecord{}, true, nil
+		}
+		return graph.DocumentRecord{}, false, graphErrors.Wrapf(err, "read note body for %s (%s)", n.ID, n.Path)
+	}
+	return graph.DocumentRecord{
+		NodeID:       n.ID,
+		Title:        firstNonEmpty(n.Metadata[graph.MetaNoteTitle], n.Name),
+		RelPath:      n.Name,
+		Scope:        inferScopeFromRel(n.Name),
+		Body:         string(body),
+		Aliases:      splitCommaList(n.Metadata[graph.MetaNoteAliases]),
+		Tags:         splitCommaList(n.Metadata[graph.MetaNoteTags]),
+		TrackedState: firstNonEmpty(n.Metadata[graph.MetaGitState], "unknown"),
+		UpdatedAt:    n.UpdatedAt,
+	}, false, nil
+}
+
+// buildArtifactDoc emits the search_docs row for an artifact node.
+// File-backed artifacts (intents, tasks, design_docs, explore_docs
+// whose Path points at a .md file) get their on-disk content folded
+// into the body; directory-backed artifacts (project, festival, phase,
+// sequence, chain) synthesise a body from name + metadata so FTS still
+// matches on e.g. the project name or status.
+func buildArtifactDoc(campRoot string, n *graph.Node) (graph.DocumentRecord, bool, error) {
+	relPath := artifactRelPath(campRoot, n)
+	body := artifactBaseBody(n)
+	if content, ok, err := readIfFile(n.Path); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "skip %s: %v\n", n.ID, err)
+			return graph.DocumentRecord{}, true, nil
+		}
+		return graph.DocumentRecord{}, false, graphErrors.Wrapf(err, "read artifact body for %s (%s)", n.ID, n.Path)
+	} else if ok {
+		body = body + "\n" + string(content)
+	}
+	title := firstNonEmpty(n.Metadata[graph.MetaNoteTitle], n.Name)
+	scope := inferScopeFromRel(relPath)
+	if relPath == "" {
+		scope = "."
+	}
+	return graph.DocumentRecord{
+		NodeID:       n.ID,
+		Title:        title,
+		RelPath:      relPath,
+		Scope:        scope,
+		Body:         body,
+		Aliases:      splitCommaList(n.Metadata[graph.MetaNoteAliases]),
+		Tags:         splitCommaList(n.Metadata[graph.MetaNoteTags]),
+		TrackedState: firstNonEmpty(n.Metadata[graph.MetaGitState], "tracked"),
+		UpdatedAt:    n.UpdatedAt,
+	}, false, nil
+}
+
+// artifactRelPath returns the campaign-relative path for an artifact
+// node. Most artifact nodes store n.Path as an absolute filesystem
+// path; we prefer Rel(campRoot, Path) so the result matches what other
+// tables (indexed_files, note rel paths) already use. When the input
+// is unsuitable the function falls back to n.Name so the search row
+// still has a non-empty rel_path.
+func artifactRelPath(campRoot string, n *graph.Node) string {
+	if campRoot != "" && n.Path != "" && filepath.IsAbs(n.Path) {
+		if rel, err := filepath.Rel(campRoot, n.Path); err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel)
+		}
+	}
+	return n.Name
+}
+
+// artifactBaseBody synthesises a search body from the artifact's
+// identity fields so the node is discoverable even when it has no
+// backing file. Keeping each field on its own line encourages FTS5's
+// tokenizer to index them as separate terms rather than one long run.
+func artifactBaseBody(n *graph.Node) string {
+	parts := []string{n.Name}
+	if n.Status != "" {
+		parts = append(parts, "status: "+n.Status)
+	}
+	if t := n.Metadata[graph.MetaNoteType]; t != "" {
+		parts = append(parts, "type: "+t)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// readIfFile returns the contents of p when p refers to a regular
+// file, along with ok=true. Directories and non-existent paths return
+// ok=false with a nil error so the caller can fall back to a synthetic
+// body without treating the absence as a failure.
+func readIfFile(p string) ([]byte, bool, error) {
+	if p == "" {
+		return nil, false, nil
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, err
+		}
+		return nil, false, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, false, nil
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil, false, err
+	}
+	return data, true, nil
 }
 
 func firstNonEmpty(a, b string) string {

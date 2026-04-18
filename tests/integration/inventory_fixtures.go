@@ -36,6 +36,13 @@ type RepoSpec struct {
 	// ParentPath, when set, is the absolute path of this repo's parent
 	// inside the container. Submodule registration uses this relationship.
 	ParentPath string
+	// SkipCampaignMarker, when true, disables the default seeding of a
+	// minimal .campaign/ directory at this repo root. SetupRepoFixtures
+	// seeds the marker for every root-level fixture (ParentPath == "" and
+	// SubmodulePath == "") so CAMP_ROOT=<path> passes camputil's
+	// IsCampaignRoot check; tests that intentionally want a non-campaign
+	// root (for example, error-path tests) opt out here.
+	SkipCampaignMarker bool
 }
 
 // SetupRepoFixtures creates git repositories inside the shared container
@@ -54,6 +61,13 @@ func (tc *TestContainer) SetupRepoFixtures(t *testing.T, specs []RepoSpec) {
 
 	for _, spec := range specs {
 		tc.createRepo(t, spec)
+		// Seed a .campaign/ marker only on the outermost fixture in the
+		// list, so camputil.FindCampaignRoot accepts CAMP_ROOT=<that path>
+		// while nested repos (whose Path sits strictly inside another
+		// spec's Path) stay marker-free.
+		if isOutermostRoot(spec, specs) && !spec.SkipCampaignMarker {
+			tc.seedCampaignMarker(t, spec.Path)
+		}
 	}
 
 	// Second pass: any repo with SubmodulePath+ParentPath registers as a
@@ -64,6 +78,45 @@ func (tc *TestContainer) SetupRepoFixtures(t *testing.T, specs []RepoSpec) {
 			continue
 		}
 		tc.registerSubmodule(t, spec.ParentPath, spec.Path, spec.SubmodulePath)
+	}
+}
+
+// isOutermostRoot reports whether spec has no ancestor fixture in the
+// same list. Submodule relationships and explicit ParentPath entries
+// also disqualify a spec from being a campaign-root candidate.
+func isOutermostRoot(spec RepoSpec, specs []RepoSpec) bool {
+	if spec.ParentPath != "" || spec.SubmodulePath != "" {
+		return false
+	}
+	for _, other := range specs {
+		if other.Path == spec.Path || other.Path == "" {
+			continue
+		}
+		if strings.HasPrefix(spec.Path, strings.TrimRight(other.Path, "/")+"/") {
+			return false
+		}
+	}
+	return true
+}
+
+// seedCampaignMarker creates a .campaign/ directory at path (with a
+// small sentinel file so the directory survives inside a git
+// worktree) whenever one is not already present. Only touched for
+// root-level fixtures; nested repo fixtures are left untouched.
+func (tc *TestContainer) seedCampaignMarker(t *testing.T, path string) {
+	t.Helper()
+	marker := joinPath(path, ".campaign")
+	if ok, _ := tc.CheckDirExists(marker); ok {
+		return
+	}
+	if err := tc.MkdirAll(marker); err != nil {
+		t.Fatalf("seed .campaign at %s: %v", path, err)
+	}
+	// Seed a sentinel so the directory is observable to anything that
+	// walks tracked state (git ls-files, snapshots, etc.). Content is
+	// intentionally minimal.
+	if err := tc.WriteFile(joinPath(marker, "campaign.yaml"), "name: fixture\n"); err != nil {
+		t.Fatalf("write .campaign/campaign.yaml at %s: %v", path, err)
 	}
 }
 

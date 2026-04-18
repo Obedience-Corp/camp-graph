@@ -65,8 +65,10 @@ func runRefresh(cmd *cobra.Command, _ []string) error {
 		CampaignRoot: cfg.CampRoot,
 		DBPath:       dbPath,
 		Store:        store,
-		BuildDocs:    buildSearchDocs,
-		BuildMetaFn:  buildMetaFn,
+		BuildDocs: func(g *graph.Graph) ([]graph.DocumentRecord, error) {
+			return buildSearchDocs(cfg.CampRoot, g)
+		},
+		BuildMetaFn: buildMetaFn,
 	}
 
 	report, err := runtime.Refresh(ctx, req)

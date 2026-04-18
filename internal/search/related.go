@@ -52,27 +52,31 @@ func Related(ctx context.Context, db *sql.DB, opts RelatedOptions) ([]RelatedIte
 	var items []RelatedItem
 	seen := map[string]bool{sourceID: true}
 
-	// Ranking order (per IMPLEMENTATION_CONTRACTS "same scope, explicit
-	// link, semantic"): scope neighbors first because they are the
-	// strongest locality signal, then explicit links, then semantic
-	// (lexical) top-up.
-	if opts.Mode == QueryModeHybrid || opts.Mode == QueryModeStructural {
-		scopeItems, err := scopeNeighbors(ctx, db, sourceID, opts.Path)
-		if err != nil {
-			return nil, err
-		}
-		items = appendUnique(items, scopeItems, seen, limit)
-		if len(items) >= limit {
-			return items[:limit], nil
-		}
-	}
-
+	// Ranking order: explicit edges first because an author-authored
+	// link is the strongest signal we have that two notes are related.
+	// Scope neighbors come next (locality boost for siblings that were
+	// never explicitly linked). Lexical hits round out the list last.
+	//
+	// Dedup is intentional: when a target matches multiple buckets we
+	// keep the highest-priority reason so the envelope reports the
+	// strongest signal rather than a same_scope near-miss.
 	if opts.Mode == QueryModeHybrid || opts.Mode == QueryModeExplicit {
 		edgeItems, err := explicitNeighbors(ctx, db, sourceID)
 		if err != nil {
 			return nil, err
 		}
 		items = appendUnique(items, edgeItems, seen, limit)
+		if len(items) >= limit {
+			return items[:limit], nil
+		}
+	}
+
+	if opts.Mode == QueryModeHybrid || opts.Mode == QueryModeStructural {
+		scopeItems, err := scopeNeighbors(ctx, db, sourceID, opts.Path)
+		if err != nil {
+			return nil, err
+		}
+		items = appendUnique(items, scopeItems, seen, limit)
 		if len(items) >= limit {
 			return items[:limit], nil
 		}
