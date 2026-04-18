@@ -39,14 +39,44 @@ just install
 Once installed on `$PATH`, camp discovers it automatically:
 
 ```bash
-camp graph build              # Build graph from campaign filesystem
-camp graph browse             # TUI graph browser
-camp graph query "auth"       # Search nodes
-camp graph context HF0001     # Show relationships for a festival
-camp graph render -f svg      # Static graph image (also: dot, png)
-camp graph render -f json     # Machine-readable export
-camp graph render -f html -o graph.html   # Self-contained browser-viewable page
+# Build graph from campaign filesystem
+camp graph build
+
+# Content-backed lexical search (FTS5) with scope + mode filters
+camp graph query "job search" --scope "Work/JobSearch" --limit 10 --json
+camp graph query "auth" --type project --mode hybrid
+
+# Workitem enrichment - scope-first related items with reasons and scores
+camp graph related --path "Work/JobSearch/Action Plan.md" --limit 10 --json
+
+# Incremental refresh (falls back to full rebuild on schema drift)
+camp graph refresh --json
+
+# Machine-readable status for freshness and FTS availability
+camp graph status --json
+
+# Scope-first TUI browser (tab cycles hybrid -> structural -> explicit -> semantic)
+camp graph browse
+
+# Focused neighborhood and rendering
+camp graph context HF0001
+camp graph render -f svg
+camp graph render --scope "Work/JobSearch" --mode structural -f dot
+camp graph render -f html -o graph.html
 ```
+
+### JSON envelopes
+
+Machine-readable commands emit stable `schema_version` tags so downstream
+tools can version-gate their parsers:
+
+- `query --json` → `graph-query/v1alpha1`
+- `related --json` → `graph-related/v1alpha1`
+- `refresh --json` → `graph-refresh/v1alpha1`
+- `status --json` → `graph-status/v1alpha1`
+
+Graph-database schema: `graphdb/v2alpha1`. A mismatch forces `refresh`
+to fall back to a full rebuild.
 
 ## Development
 

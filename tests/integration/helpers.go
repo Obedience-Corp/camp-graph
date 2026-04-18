@@ -243,9 +243,11 @@ func (tc *TestContainer) WriteFile(path, content string) error {
 		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
+	quotedContent := "'" + strings.ReplaceAll(content, "'", "'\\''") + "'"
+	quotedPath := "'" + strings.ReplaceAll(path, "'", "'\\''") + "'"
 	exitCode, _, err = tc.container.Exec(tc.ctx, []string{
 		"sh", "-c",
-		fmt.Sprintf("printf '%%s' '%s' > %s", strings.ReplaceAll(content, "'", "'\\''"), path),
+		fmt.Sprintf("printf '%%s' %s > %s", quotedContent, quotedPath),
 	})
 	if err != nil || exitCode != 0 {
 		return fmt.Errorf("failed to write file: %w", err)

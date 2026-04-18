@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 )
 
@@ -36,7 +37,7 @@ type htmlData struct {
 func RenderHTML(ctx context.Context, w io.Writer, g *graph.Graph) error {
 	var svgBuf bytes.Buffer
 	if err := RenderGraphviz(ctx, &svgBuf, g, FormatSVG); err != nil {
-		return fmt.Errorf("render SVG for HTML embed: %w", err)
+		return graphErrors.Wrap(err, "render SVG for HTML embed")
 	}
 
 	data := htmlData{

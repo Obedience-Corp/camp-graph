@@ -4,17 +4,19 @@ package scanner
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 )
 
 // Scanner walks a campaign directory and produces graph nodes and edges.
 type Scanner struct {
-	root string
+	root             string
+	inventory        *Inventory
+	inventoryOptions InventoryOptions
 }
 
 // New creates a scanner rooted at the given campaign directory.
@@ -22,24 +24,87 @@ func New(root string) *Scanner {
 	return &Scanner{root: root}
 }
 
+// SetInventoryOptions overrides the inventory-build options used by Scan.
+// Intended for tests that supply a custom GitProbe or want to include
+// ignored entries.
+func (s *Scanner) SetInventoryOptions(opts InventoryOptions) {
+	s.inventoryOptions = opts
+}
+
+// Inventory returns the inventory computed by the most recent Scan call,
+// or nil if Scan has not been run.
+func (s *Scanner) Inventory() *Inventory {
+	return s.inventory
+}
+
 // Scan walks the campaign filesystem and returns a populated graph.
+//
+// Before any artifact or content pass runs, Scan builds a shared
+// Inventory containing the campaign-root and nested-repo boundaries and
+// the live-worktree entries inside them so later passes consume a single
+// canonical view of repo scope.
 func (s *Scanner) Scan(ctx context.Context) (*graph.Graph, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	inv, err := BuildInventory(ctx, s.root, s.inventoryOptions)
+	if err != nil {
+		return nil, graphErrors.Wrap(err, "build inventory")
+	}
+	s.inventory = inv
+
 	g := graph.New()
 
+	if err := s.scanScopes(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "scan scopes")
+	}
 	if err := s.scanProjects(ctx, g); err != nil {
-		return nil, fmt.Errorf("scan projects: %w", err)
+		return nil, graphErrors.Wrap(err, "scan projects")
 	}
 	if err := s.scanFestivals(ctx, g); err != nil {
-		return nil, fmt.Errorf("scan festivals: %w", err)
+		return nil, graphErrors.Wrap(err, "scan festivals")
 	}
 	if err := s.scanIntents(ctx, g); err != nil {
-		return nil, fmt.Errorf("scan intents: %w", err)
+		return nil, graphErrors.Wrap(err, "scan intents")
 	}
 	if err := s.scanWorkflow(ctx, g); err != nil {
-		return nil, fmt.Errorf("scan workflow: %w", err)
+		return nil, graphErrors.Wrap(err, "scan workflow")
+	}
+
+	// Emit note nodes for markdown inventory entries that are not owned
+	// by a dedicated artifact scanner. Note creation runs after artifact
+	// scanning so shouldEmitNoteNode can defer to artifact IDs where
+	// they already exist.
+	if err := s.scanNotes(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "scan notes")
+	}
+
+	// Parse explicit references (markdown links, wiki-links, canvas
+	// connections, inline tags, embedded attachments) into explicit
+	// edges. Must run after scanNotes so link targets can be resolved
+	// to note IDs.
+	if err := s.extractExplicitLinks(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "extract explicit links")
+	}
+
+	// Bridge artifact nodes to the scope graph so the two layers share
+	// a single structural spine.
+	if err := s.bridgeArtifactsToScopes(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "bridge artifacts to scopes")
+	}
+
+	// Code-aware slice extraction: emits NodeFile entries (and Go
+	// NodePackage groupings) for nested repo boundaries only so we
+	// keep code slices from flooding the campaign-root graph.
+	if err := s.extractCodeSlices(ctx, g); err != nil {
+		return nil, graphErrors.Wrap(err, "extract code slices")
+	}
+
+	// Deterministic inference: bounded candidate generation then
+	// aggregation to one inferred edge per pair with evidence reasons.
+	candidates := GenerateCandidates(ctx, g, DefaultCandidateBudget())
+	if err := s.aggregateInferredEdges(ctx, g, candidates); err != nil {
+		return nil, graphErrors.Wrap(err, "aggregate inferred edges")
 	}
 
 	// Pass 2: Extract metadata and create relationship edges
@@ -66,7 +131,7 @@ func (s *Scanner) scanProjects(ctx context.Context, g *graph.Graph) error {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("read projects dir: %w", err)
+		return graphErrors.Wrap(err, "read projects dir")
 	}
 	for _, e := range entries {
 		if ctx.Err() != nil {
@@ -103,7 +168,7 @@ func (s *Scanner) scanFestivals(ctx context.Context, g *graph.Graph) error {
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("read %s: %w", subdir, err)
+			return graphErrors.Wrapf(err, "read %s", subdir)
 		}
 		for _, e := range entries {
 			if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
@@ -214,7 +279,7 @@ func (s *Scanner) scanIntents(ctx context.Context, g *graph.Graph) error {
 			return ctx.Err()
 		}
 		if err := scanMDFiles(filepath.Join(intentsRoot, status), status); err != nil {
-			return fmt.Errorf("scan intents/%s: %w", status, err)
+			return graphErrors.Wrapf(err, "scan intents/%s", status)
 		}
 	}
 
@@ -225,7 +290,7 @@ func (s *Scanner) scanIntents(ctx context.Context, g *graph.Graph) error {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("read intents/dungeon: %w", err)
+		return graphErrors.Wrap(err, "read intents/dungeon")
 	}
 	for _, de := range dungeonEntries {
 		if ctx.Err() != nil {
@@ -235,7 +300,7 @@ func (s *Scanner) scanIntents(ctx context.Context, g *graph.Graph) error {
 			continue
 		}
 		if err := scanMDFiles(filepath.Join(dungeonDir, de.Name()), de.Name()); err != nil {
-			return fmt.Errorf("scan intents/dungeon/%s: %w", de.Name(), err)
+			return graphErrors.Wrapf(err, "scan intents/dungeon/%s", de.Name())
 		}
 	}
 
@@ -268,10 +333,10 @@ func (s *Scanner) scanWorkflow(ctx context.Context, g *graph.Graph) error {
 	}
 
 	if err := scanDir("design", newDesignDocNode); err != nil {
-		return fmt.Errorf("scan design: %w", err)
+		return graphErrors.Wrap(err, "scan design")
 	}
 	if err := scanDir("explore", newExploreDocNode); err != nil {
-		return fmt.Errorf("scan explore: %w", err)
+		return graphErrors.Wrap(err, "scan explore")
 	}
 	return nil
 }

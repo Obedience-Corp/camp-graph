@@ -41,35 +41,154 @@ type neighborEntry struct {
 	direction string
 }
 
-// Model is the BubbleTea model for the graph browser.
-type Model struct {
-	graph       *graph.Graph
-	nodes       []*graph.Node
-	filtered    []*graph.Node
-	cursor      int
-	search      textinput.Model
-	searching   bool
-	width       int
-	height      int
-	mode        viewMode
-	focusNode   *graph.Node
-	neighbors   []*neighborEntry
-	microCursor int
-	history     []*graph.Node
+// RelationMode controls which edge-source classes are shown in the
+// micrograph and neighbor list. The default is RelationHybrid; pressing
+// tab cycles hybrid -> structural -> explicit -> semantic.
+type RelationMode int
+
+const (
+	RelationHybrid RelationMode = iota
+	RelationStructural
+	RelationExplicit
+	RelationSemantic
+)
+
+// String returns the human-readable name of the relation mode.
+func (r RelationMode) String() string {
+	switch r {
+	case RelationStructural:
+		return "structural"
+	case RelationExplicit:
+		return "explicit"
+	case RelationSemantic:
+		return "semantic"
+	default:
+		return "hybrid"
+	}
 }
 
-// New creates a new TUI model from a populated graph.
+// Cycle returns the next relation mode in the tab order.
+func (r RelationMode) Cycle() RelationMode {
+	switch r {
+	case RelationHybrid:
+		return RelationStructural
+	case RelationStructural:
+		return RelationExplicit
+	case RelationExplicit:
+		return RelationSemantic
+	default:
+		return RelationHybrid
+	}
+}
+
+// Model is the BubbleTea model for the graph browser.
+type Model struct {
+	graph        *graph.Graph
+	// scopeAnchors is the scope-first default list shown when browse
+	// opens. It contains the campaign-root folder plus every
+	// campaign-bucket and repo-root folder. Users widen from here.
+	scopeAnchors []*graph.Node
+	nodes        []*graph.Node
+	filtered     []*graph.Node
+	cursor       int
+	search       textinput.Model
+	searching    bool
+	width        int
+	height       int
+	mode         viewMode
+	focusNode    *graph.Node
+	neighbors    []*neighborEntry
+	microCursor  int
+	history      []*graph.Node
+	relationMode RelationMode
+	// showingAnchors is true when the list displays scopeAnchors;
+	// becomes false once a scope is opened or the user widens to all
+	// nodes via `a`.
+	showingAnchors bool
+}
+
+// New creates a new TUI model from a populated graph. The browser
+// opens on scope anchors rather than every node so users see campaign
+// buckets, repo roots, and user-authored top-level scopes first.
 func New(g *graph.Graph) Model {
 	ti := textinput.New()
-	ti.Placeholder = "search nodes..."
+	ti.Placeholder = "search scopes/nodes..."
 	ti.CharLimit = 64
 
 	nodes := g.Nodes()
+	anchors := collectScopeAnchors(g)
 	return Model{
-		graph:    g,
-		nodes:    nodes,
-		filtered: nodes,
-		search:   ti,
+		graph:          g,
+		nodes:          nodes,
+		scopeAnchors:   anchors,
+		filtered:       anchors,
+		search:         ti,
+		relationMode:   RelationHybrid,
+		showingAnchors: true,
+	}
+}
+
+// collectScopeAnchors selects the scope nodes that form the top-level
+// browse list: campaign root, repo/submodule roots, and campaign-bucket
+// folders. Ordered by scope kind priority then path length.
+func collectScopeAnchors(g *graph.Graph) []*graph.Node {
+	priority := map[string]int{
+		graph.ScopeKindCampaignRoot:   0,
+		graph.ScopeKindRepoRoot:       1,
+		graph.ScopeKindSubmoduleRoot:  1,
+		graph.ScopeKindCampaignBucket: 2,
+		graph.ScopeKindArtifactScope:  3,
+		graph.ScopeKindUserScope:      4,
+	}
+	var anchors []*graph.Node
+	for _, n := range g.Nodes() {
+		if n.Type != graph.NodeFolder {
+			continue
+		}
+		kind := n.Metadata[graph.MetaScopeKind]
+		if _, ok := priority[kind]; !ok {
+			continue
+		}
+		// Only include depth-0 and depth-1 scopes as top-level anchors
+		// so the initial view stays compact. Users widen by pressing
+		// enter on a scope to descend into the neighborhood.
+		depth := n.Metadata[graph.MetaPathDepth]
+		if depth == "" {
+			continue
+		}
+		if depth != "0" && depth != "1" && kind != graph.ScopeKindRepoRoot && kind != graph.ScopeKindSubmoduleRoot {
+			// Still include sub-bucket anchors like workflow/design.
+			if kind != graph.ScopeKindCampaignBucket {
+				continue
+			}
+		}
+		anchors = append(anchors, n)
+	}
+	// Stable ordering: kind priority then path depth then name.
+	sortByScopePriority(anchors, priority)
+	return anchors
+}
+
+func sortByScopePriority(nodes []*graph.Node, priority map[string]int) {
+	byPriority := func(a, b *graph.Node) bool {
+		ap := priority[a.Metadata[graph.MetaScopeKind]]
+		bp := priority[b.Metadata[graph.MetaScopeKind]]
+		if ap != bp {
+			return ap < bp
+		}
+		ad := a.Metadata[graph.MetaPathDepth]
+		bd := b.Metadata[graph.MetaPathDepth]
+		if ad != bd {
+			return ad < bd
+		}
+		return a.Name < b.Name
+	}
+	// Simple insertion sort to avoid a sort import if not already
+	// present.
+	for i := 1; i < len(nodes); i++ {
+		for j := i; j > 0 && byPriority(nodes[j], nodes[j-1]); j-- {
+			nodes[j], nodes[j-1] = nodes[j-1], nodes[j]
+		}
 	}
 }
 
@@ -115,6 +234,18 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searching = true
 		m.search.Focus()
 		return m, m.search.Cursor.BlinkCmd()
+	case "tab":
+		m.relationMode = m.relationMode.Cycle()
+	case "a":
+		// Widen from scope anchors to all nodes on demand.
+		m.showingAnchors = false
+		m.filtered = m.nodes
+		m.cursor = 0
+	case "s":
+		// Return to scope-anchor view.
+		m.showingAnchors = true
+		m.filtered = m.scopeAnchors
+		m.cursor = 0
 	case "enter":
 		if len(m.filtered) > 0 {
 			m.enterMicrograph(m.filtered[m.cursor])
@@ -135,6 +266,9 @@ func (m Model) updateMicrograph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.microCursor < len(m.neighbors)-1 {
 			m.microCursor++
 		}
+	case "tab":
+		m.relationMode = m.relationMode.Cycle()
+		m.reloadNeighborsForFocus()
 	case "enter":
 		if len(m.neighbors) > 0 {
 			m.history = append(m.history, m.focusNode)
@@ -156,21 +290,52 @@ func (m *Model) enterMicrograph(n *graph.Node) {
 	m.mode = modeMicrograph
 	m.focusNode = n
 	m.microCursor = 0
-	m.neighbors = nil
+	m.reloadNeighborsForFocus()
+}
 
-	for _, e := range m.graph.EdgesFrom(n.ID) {
+// reloadNeighborsForFocus rebuilds the neighbor list based on the
+// current relation mode filter.
+func (m *Model) reloadNeighborsForFocus() {
+	m.neighbors = nil
+	if m.focusNode == nil {
+		return
+	}
+	for _, e := range m.graph.EdgesFrom(m.focusNode.ID) {
+		if !edgeAllowedInMode(e, m.relationMode) {
+			continue
+		}
 		if neighbor := m.graph.Node(e.ToID); neighbor != nil {
 			m.neighbors = append(m.neighbors, &neighborEntry{
 				node: neighbor, edge: e, direction: "→",
 			})
 		}
 	}
-	for _, e := range m.graph.EdgesTo(n.ID) {
+	for _, e := range m.graph.EdgesTo(m.focusNode.ID) {
+		if !edgeAllowedInMode(e, m.relationMode) {
+			continue
+		}
 		if neighbor := m.graph.Node(e.FromID); neighbor != nil {
 			m.neighbors = append(m.neighbors, &neighborEntry{
 				node: neighbor, edge: e, direction: "←",
 			})
 		}
+	}
+}
+
+// edgeAllowedInMode reports whether an edge passes the current
+// relation-mode filter. Hybrid allows every edge; structural keeps
+// SourceStructural; explicit keeps SourceExplicit; semantic keeps
+// SourceInferred.
+func edgeAllowedInMode(e *graph.Edge, mode RelationMode) bool {
+	switch mode {
+	case RelationStructural:
+		return e.Source == graph.SourceStructural
+	case RelationExplicit:
+		return e.Source == graph.SourceExplicit
+	case RelationSemantic:
+		return e.Source == graph.SourceInferred
+	default:
+		return true
 	}
 }
 
@@ -292,7 +457,11 @@ func (m Model) renderList(width int) string {
 	if m.searching {
 		header += " " + m.search.View()
 	} else {
-		header += fmt.Sprintf(" (%d nodes)", len(m.filtered))
+		mode := "all"
+		if m.showingAnchors {
+			mode = "scopes"
+		}
+		header += fmt.Sprintf(" (%d %s, relation=%s)", len(m.filtered), mode, m.relationMode)
 	}
 	b.WriteString(header + "\n\n")
 
@@ -365,7 +534,8 @@ func (m Model) renderDetail(width int) string {
 		}
 	}
 
-	b.WriteString("\n" + defaultStyle.Render("enter: micrograph  ↑↓/jk: navigate  /: search  q: quit"))
+	b.WriteString("\n" + defaultStyle.Render(
+		"enter: micrograph  ↑↓/jk: navigate  /: search  tab: cycle relation  a: all  s: scopes  q: quit"))
 
 	return lipgloss.NewStyle().Width(width).Render(b.String())
 }
