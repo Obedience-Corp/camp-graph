@@ -54,8 +54,8 @@ const (
 // consume scope information.
 const (
 	MetaScopeKind   = "scope_kind"
-	MetaRepoRoot   = "repo_root"
-	MetaPathDepth  = "path_depth"
+	MetaRepoRoot    = "repo_root"
+	MetaPathDepth   = "path_depth"
 	MetaIsSubmodule = "is_submodule"
 	MetaBoundaryRel = "boundary_rel"
 )
@@ -172,12 +172,12 @@ func (t NodeType) String() string {
 // entries. These are the stable contract for search, browse, and
 // inference passes that consume note metadata.
 const (
-	MetaNoteTitle    = "title"
-	MetaNoteAliases  = "aliases"
-	MetaNoteTags     = "tags"
-	MetaNoteType     = "type"
-	MetaNoteStatus   = "status"
-	MetaGitState     = "git_state"
+	MetaNoteTitle   = "title"
+	MetaNoteAliases = "aliases"
+	MetaNoteTags    = "tags"
+	MetaNoteType    = "type"
+	MetaNoteStatus  = "status"
+	MetaGitState    = "git_state"
 )
 
 // String returns the display name for an EdgeType.

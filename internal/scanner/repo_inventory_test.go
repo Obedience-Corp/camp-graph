@@ -247,9 +247,9 @@ func TestInventory_BoundaryFor(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		path      string
-		wantRel   string
+		name       string
+		path       string
+		wantRel    string
 		wantNotNil bool
 	}{
 		{

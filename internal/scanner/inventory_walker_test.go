@@ -34,8 +34,8 @@ func buildTrackedUntrackedIgnoredFixture(t *testing.T) (root string, probe *scan
 			"workflow/design/new-note.md": true,
 		},
 		Ignored: map[string]bool{
-			"bin/camp-graph":         true,
-			".gocache/object/x.bin":  true,
+			"bin/camp-graph":        true,
+			".gocache/object/x.bin": true,
 		},
 	}
 

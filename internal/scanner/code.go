@@ -30,7 +30,7 @@ var codeExtensions = map[string]string{
 	"cc":   "cpp",
 	"cpp":  "cpp",
 	"hpp":  "cpp",
-	"md":   "",  // excluded via empty string
+	"md":   "", // excluded via empty string
 }
 
 // goPackageRe extracts the `package foo` declaration from the first
