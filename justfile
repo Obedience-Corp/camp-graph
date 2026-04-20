@@ -27,49 +27,40 @@ default:
 
 # Compile the buildutil wrapper (cached, only rebuilds when missing)
 [private]
-[no-cd]
 _buildtool:
     @test -f {{BUILDTOOL}} || (mkdir -p bin && go build -o {{BUILDTOOL}} ./internal/buildutil)
 
 # Build camp-graph binary (with dashboard)
-[no-cd]
 build: _buildtool
     @{{BUILDTOOL}} build
 
 # Build binary only (fast, no vet)
-[no-cd]
 build-only: _buildtool
     @{{BUILDTOOL}} build-only
 
 # Format Go code
-[no-cd]
 fmt:
     go fmt ./...
 
 # Run go vet
-[no-cd]
 vet:
     go vet ./...
 
 # Run formatting and vetting
-[no-cd]
 lint: fmt vet
     @echo "Linting complete"
 
 # Clean build artifacts
-[no-cd]
 clean: _buildtool
     @{{BUILDTOOL}} clean
     @rm -rf completions dist out
 
 # Update and tidy dependencies
-[no-cd]
 deps:
     go get -u ./...
     go mod tidy
 
 # Tidy dependencies
-[no-cd]
 tidy:
     go mod tidy
 
