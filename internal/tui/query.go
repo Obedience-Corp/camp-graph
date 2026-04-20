@@ -137,6 +137,14 @@ func groupByType(results []search.QueryResult) []resultGroup {
 	return groups
 }
 
+// querierIface is the subset of *search.Querier that internal/tui
+// depends on. Declaring it here keeps the dependency one-directional;
+// *search.Querier satisfies it structurally. Tests substitute a stub
+// to exercise cancellation and msg-routing without a real database.
+type querierIface interface {
+	Search(ctx context.Context, opts search.QueryOptions) ([]search.QueryResult, error)
+}
+
 // buildOpts maps UI state on Model to a search.QueryOptions value.
 // Pure: no I/O, no pointer escape beyond the returned struct.
 func buildOpts(m Model) search.QueryOptions {
@@ -157,7 +165,7 @@ type queryResultMsg struct {
 // runQueryCmd executes a search on the given querier and wraps the
 // result in a queryResultMsg tagged with gen. The caller owns ctx and
 // must cancel it when the Cmd is superseded.
-func runQueryCmd(ctx context.Context, q *search.Querier, opts search.QueryOptions, gen uint64) tea.Cmd {
+func runQueryCmd(ctx context.Context, q querierIface, opts search.QueryOptions, gen uint64) tea.Cmd {
 	return func() tea.Msg {
 		results, err := q.Search(ctx, opts)
 		return queryResultMsg{gen: gen, results: results, err: err}

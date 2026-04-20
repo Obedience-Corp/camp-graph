@@ -68,7 +68,7 @@ func (r RelationMode) Cycle() RelationMode {
 type Model struct {
 	ctx     context.Context
 	store   *graph.Store
-	querier *search.Querier
+	querier querierIface
 	graph   *graph.Graph
 	// scopeAnchors is the scope-first default list shown when browse
 	// opens. It contains the campaign-root folder plus every

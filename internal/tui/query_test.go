@@ -1,13 +1,128 @@
 package tui
 
 import (
+	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
 )
+
+type stubQuerier struct {
+	mu      sync.Mutex
+	calls   []*stubCall
+	release chan struct{}
+}
+
+type stubCall struct {
+	term string
+	ctx  context.Context
+}
+
+func (s *stubQuerier) Search(ctx context.Context, opts search.QueryOptions) ([]search.QueryResult, error) {
+	s.mu.Lock()
+	call := &stubCall{term: opts.Term, ctx: ctx}
+	s.calls = append(s.calls, call)
+	s.mu.Unlock()
+	select {
+	case <-s.release:
+		return []search.QueryResult{{NodeID: opts.Term, NodeType: "task", Title: opts.Term}}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (s *stubQuerier) callCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.calls)
+}
+
+func waitFor(t *testing.T, fn func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if fn() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for condition")
+}
+
+func TestQueryCancellation(t *testing.T) {
+	stub := &stubQuerier{release: make(chan struct{})}
+
+	terms := []string{"a", "ab", "abc"}
+	cancelsByTerm := make(map[string]context.CancelFunc, len(terms))
+	msgCh := make(chan tea.Msg, len(terms))
+	for i, term := range terms {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancelsByTerm[term] = cancel
+		cmd := runQueryCmd(ctx, stub, search.QueryOptions{Term: term}, uint64(i+1))
+		go func() { msgCh <- cmd() }()
+	}
+
+	waitFor(t, func() bool { return stub.callCount() == 3 })
+
+	cancelsByTerm["a"]()
+	cancelsByTerm["ab"]()
+	defer cancelsByTerm["abc"]()
+
+	callCtxByTerm := func(term string) context.Context {
+		stub.mu.Lock()
+		defer stub.mu.Unlock()
+		for _, c := range stub.calls {
+			if c.term == term {
+				return c.ctx
+			}
+		}
+		t.Fatalf("no call observed for term %q", term)
+		return nil
+	}
+	for _, term := range []string{"a", "ab"} {
+		select {
+		case <-callCtxByTerm(term).Done():
+		case <-time.After(time.Second):
+			t.Fatalf("context for term %q not cancelled", term)
+		}
+	}
+
+	close(stub.release)
+
+	received := make([]queryResultMsg, 0, 3)
+	timeout := time.After(2 * time.Second)
+	for len(received) < 3 {
+		select {
+		case msg := <-msgCh:
+			qrm, ok := msg.(queryResultMsg)
+			if !ok {
+				t.Fatalf("unexpected msg type %T", msg)
+			}
+			received = append(received, qrm)
+		case <-timeout:
+			t.Fatalf("only received %d/3 msgs", len(received))
+		}
+	}
+
+	m := Model{queryGen: 3}
+	for _, msg := range received {
+		next, _ := m.Update(msg)
+		m = next.(Model)
+	}
+
+	if len(m.results) != 1 || m.results[0].NodeID != "abc" {
+		t.Fatalf("expected only gen-3 result accepted, got %+v", m.results)
+	}
+	if m.queryCancel != nil {
+		t.Fatal("expected queryCancel nil after accepting gen-3 msg")
+	}
+}
 
 func TestBuildOpts(t *testing.T) {
 	cases := []struct {
