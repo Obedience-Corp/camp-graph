@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
+	"github.com/Obedience-Corp/camp-graph/internal/search"
 )
 
 type viewMode int
@@ -65,9 +66,10 @@ func (r RelationMode) Cycle() RelationMode {
 
 // Model is the BubbleTea model for the graph browser.
 type Model struct {
-	ctx   context.Context
-	store *graph.Store
-	graph *graph.Graph
+	ctx     context.Context
+	store   *graph.Store
+	querier *search.Querier
+	graph   *graph.Graph
 	// scopeAnchors is the scope-first default list shown when browse
 	// opens. It contains the campaign-root folder plus every
 	// campaign-bucket and repo-root folder. Users widen from here.
@@ -104,6 +106,7 @@ func New(ctx context.Context, store *graph.Store, g *graph.Graph) *Model {
 	return &Model{
 		ctx:            ctx,
 		store:          store,
+		querier:        search.NewQuerier(store.DB()),
 		graph:          g,
 		nodes:          nodes,
 		scopeAnchors:   anchors,

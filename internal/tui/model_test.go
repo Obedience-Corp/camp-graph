@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,8 +12,9 @@ import (
 
 func TestNewStartsOnScopeAnchors(t *testing.T) {
 	g := newTestGraph()
+	store := newTestStore(t)
 
-	m := New(context.Background(), nil, g)
+	m := New(context.Background(), store, g)
 	if m == nil {
 		t.Fatal("New returned nil model")
 	}
@@ -36,7 +38,7 @@ func TestNewStartsOnScopeAnchors(t *testing.T) {
 }
 
 func TestSearchEscClearsQueryAndRestoresAllNodes(t *testing.T) {
-	model := *New(context.Background(), nil, newTestGraph())
+	model := *New(context.Background(), newTestStore(t), newTestGraph())
 
 	model = updateModel(t, model, keyRunes("/"))
 	if !model.searching {
@@ -67,7 +69,7 @@ func TestSearchEscClearsQueryAndRestoresAllNodes(t *testing.T) {
 }
 
 func TestEnterOpensMicrographAndEscReturnsToList(t *testing.T) {
-	model := *New(context.Background(), nil, newTestGraph())
+	model := *New(context.Background(), newTestStore(t), newTestGraph())
 
 	model = updateModel(t, model, keyNamed(tea.KeyEnter))
 	if model.mode != modeMicrograph {
@@ -106,6 +108,16 @@ func keyNamed(keyType tea.KeyType) tea.KeyMsg {
 
 func keyRunes(input string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(input)}
+}
+
+func newTestStore(t *testing.T) *graph.Store {
+	t.Helper()
+	store, err := graph.OpenStore(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open test store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	return store
 }
 
 func newTestGraph() *graph.Graph {
