@@ -37,7 +37,7 @@ func TestNewStartsOnScopeAnchors(t *testing.T) {
 	}
 }
 
-func TestSearchEscClearsQueryAndRestoresAllNodes(t *testing.T) {
+func TestSearchEscClearsQueryAndExitsSearchMode(t *testing.T) {
 	model := *New(context.Background(), newTestStore(t), newTestGraph())
 
 	model = updateModel(t, model, keyRunes("/"))
@@ -49,9 +49,6 @@ func TestSearchEscClearsQueryAndRestoresAllNodes(t *testing.T) {
 	if got := model.search.Value(); got != "camp" {
 		t.Fatalf("expected search query %q, got %q", "camp", got)
 	}
-	if len(model.filtered) == 0 {
-		t.Fatal("expected filtered results for query")
-	}
 
 	model = updateModel(t, model, keyNamed(tea.KeyEsc))
 	if model.searching {
@@ -60,11 +57,14 @@ func TestSearchEscClearsQueryAndRestoresAllNodes(t *testing.T) {
 	if got := model.search.Value(); got != "" {
 		t.Fatalf("expected cleared search query, got %q", got)
 	}
-	if got, want := len(model.filtered), len(model.nodes); got != want {
-		t.Fatalf("expected esc to restore all nodes (%d), got %d", want, got)
-	}
 	if model.cursor != 0 {
 		t.Fatalf("expected cursor reset to 0 after esc, got %d", model.cursor)
+	}
+	if model.results != nil {
+		t.Fatalf("expected results cleared on esc, got %d entries", len(model.results))
+	}
+	if model.queryCancel != nil {
+		t.Fatal("expected queryCancel nil after esc")
 	}
 }
 

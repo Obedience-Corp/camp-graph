@@ -1,11 +1,9 @@
 package tui
 
 import (
-	"strings"
+	"context"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/Obedience-Corp/camp-graph/internal/graph"
 )
 
 // Update implements tea.Model.
@@ -84,8 +82,12 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searching = false
 		m.search.Reset()
 		m.search.Blur()
-		m.filtered = m.nodes
 		m.cursor = 0
+		if m.queryCancel != nil {
+			m.queryCancel()
+			m.queryCancel = nil
+		}
+		m.results = nil
 		return m, nil
 	case "enter":
 		m.searching = false
@@ -93,27 +95,26 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var cmd tea.Cmd
-	m.search, cmd = m.search.Update(msg)
-	m.applyFilter()
-	return m, cmd
-}
+	var inputCmd tea.Cmd
+	m.search, inputCmd = m.search.Update(msg)
 
-func (m *Model) applyFilter() {
-	query := strings.ToLower(m.search.Value())
-	if query == "" {
-		m.filtered = m.nodes
-		return
-	}
-	var result []*graph.Node
-	for _, n := range m.nodes {
-		if strings.Contains(strings.ToLower(n.Name), query) ||
-			strings.Contains(strings.ToLower(string(n.Type)), query) {
-			result = append(result, n)
+	opts := buildOpts(m)
+	if opts.Term == "" {
+		if m.queryCancel != nil {
+			m.queryCancel()
+			m.queryCancel = nil
 		}
+		m.results = nil
+		return m, inputCmd
 	}
-	m.filtered = result
-	if m.cursor >= len(m.filtered) {
-		m.cursor = max(0, len(m.filtered)-1)
+
+	m.queryGen++
+	if m.queryCancel != nil {
+		m.queryCancel()
 	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.queryCancel = cancel
+	queryCmd := runQueryCmd(ctx, m.querier, opts, m.queryGen)
+
+	return m, tea.Batch(inputCmd, queryCmd)
 }
