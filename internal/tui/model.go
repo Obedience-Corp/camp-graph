@@ -91,6 +91,13 @@ type Model struct {
 	// becomes false once a scope is opened or the user widens to all
 	// nodes via `a`.
 	showingAnchors bool
+
+	// Query churn control. queryGen tags each issued query so stale
+	// results can be dropped; queryCancel cancels the in-flight Cmd
+	// context when a newer query supersedes it.
+	queryGen    uint64
+	queryCancel context.CancelFunc
+	results     []search.QueryResult
 }
 
 // New creates a new TUI model from a populated graph. The browser

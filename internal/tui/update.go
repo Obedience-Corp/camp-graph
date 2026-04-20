@@ -16,6 +16,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
+	case queryResultMsg:
+		if msg.gen != m.queryGen {
+			return m, nil
+		}
+		m.queryCancel = nil
+		if msg.err != nil {
+			m.results = nil
+		} else {
+			m.results = msg.results
+		}
+		// TODO(task-05): m.groups = groupByType(m.results)
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.searching {
 			return m.updateSearch(msg)
