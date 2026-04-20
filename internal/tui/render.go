@@ -49,6 +49,15 @@ func (m Model) View() string {
 func (m Model) renderList(width int) string {
 	var b strings.Builder
 
+	// Grouped FTS rendering lands in a later sequence; until then we
+	// fall through to list rendering with whichever slice is active:
+	// m.filteredAnchors for the empty-query fallback, otherwise
+	// m.filtered for legacy list/anchor views.
+	rows := m.filtered
+	if m.groups == nil && m.filteredAnchors != nil {
+		rows = m.filteredAnchors
+	}
+
 	header := titleStyle.Render("Graph Browser")
 	if m.searching {
 		header += " " + m.search.View()
@@ -57,7 +66,7 @@ func (m Model) renderList(width int) string {
 		if m.showingAnchors {
 			mode = "scopes"
 		}
-		header += fmt.Sprintf(" (%d %s, relation=%s)", len(m.filtered), mode, m.relationMode)
+		header += fmt.Sprintf(" (%d %s, relation=%s)", len(rows), mode, m.relationMode)
 	}
 	b.WriteString(header + "\n\n")
 
@@ -68,8 +77,8 @@ func (m Model) renderList(width int) string {
 		start = m.cursor - visibleLines + 1
 	}
 
-	for i := start; i < len(m.filtered) && i < start+visibleLines; i++ {
-		n := m.filtered[i]
+	for i := start; i < len(rows) && i < start+visibleLines; i++ {
+		n := rows[i]
 		tag := strings.ToUpper(string(n.Type)[:3])
 		line := fmt.Sprintf("[%s] %s", tag, n.Name)
 

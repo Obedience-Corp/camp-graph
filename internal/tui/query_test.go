@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 
+	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
 )
 
@@ -75,6 +76,65 @@ func TestGroupByTypeEmpty(t *testing.T) {
 	if got := groupByType(nil); got != nil {
 		t.Fatalf("groupByType(nil)=%v want nil", got)
 	}
+}
+
+func TestBuildOptsEmptyTermYieldsZeroOpts(t *testing.T) {
+	m := Model{search: newTestInput("")}
+	got := buildOpts(m)
+	want := search.QueryOptions{}
+	if got != want {
+		t.Fatalf("buildOpts(empty)=%+v want zero %+v", got, want)
+	}
+}
+
+func TestFilterAnchors(t *testing.T) {
+	anchors := []*graph.Node{
+		{ID: "root", Type: graph.NodeFolder, Name: ".", Path: "."},
+		{ID: "repo", Type: graph.NodeFolder, Name: "projects/camp", Path: "projects/camp"},
+		{ID: "workflow", Type: graph.NodeFolder, Name: "workflow", Path: "workflow"},
+		{ID: "file", Type: graph.NodeFile, Name: "a.go", Path: "projects/camp/a.go", Metadata: map[string]string{"tracked_state": "tracked"}},
+		{ID: "untracked", Type: graph.NodeFile, Name: "b.go", Path: "projects/other/b.go", Metadata: map[string]string{"tracked_state": "untracked"}},
+	}
+
+	t.Run("all defaults returns input", func(t *testing.T) {
+		got := filterAnchors(anchors, "", "", "")
+		if len(got) != len(anchors) {
+			t.Fatalf("got %d want %d", len(got), len(anchors))
+		}
+	})
+
+	t.Run("type chip narrows", func(t *testing.T) {
+		got := filterAnchors(anchors, string(graph.NodeFolder), "", "")
+		if len(got) != 3 {
+			t.Fatalf("got %d want 3 folders", len(got))
+		}
+	})
+
+	t.Run("tracked only chip narrows", func(t *testing.T) {
+		got := filterAnchors(anchors, "", "Tracked only", "")
+		if len(got) != 1 || got[0].ID != "file" {
+			t.Fatalf("got %+v want [file]", got)
+		}
+	})
+
+	t.Run("untracked only chip narrows", func(t *testing.T) {
+		got := filterAnchors(anchors, "", "Untracked only", "")
+		if len(got) != 1 || got[0].ID != "untracked" {
+			t.Fatalf("got %+v want [untracked]", got)
+		}
+	})
+
+	t.Run("scope prefix narrows", func(t *testing.T) {
+		got := filterAnchors(anchors, "", "", "projects/camp")
+		if len(got) != 2 {
+			t.Fatalf("got %d want 2", len(got))
+		}
+		for _, n := range got {
+			if n.Path != "projects/camp" && n.Path != "projects/camp/a.go" {
+				t.Fatalf("unexpected node in scope result: %s", n.Path)
+			}
+		}
+	})
 }
 
 func newTestInput(term string) textinput.Model {

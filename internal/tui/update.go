@@ -89,6 +89,7 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.results = nil
 		m.groups = nil
+		m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(m), chipTrackedValue(m), m.scope)
 		return m, nil
 	case "enter":
 		m.searching = false
@@ -107,6 +108,7 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.results = nil
 		m.groups = nil
+		m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(m), chipTrackedValue(m), m.scope)
 		return m, inputCmd
 	}
 

@@ -3,11 +3,56 @@ package tui
 import (
 	"context"
 	"sort"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
 )
+
+// filterAnchors returns anchors filtered by UI chip/scope state.
+// When all filters are at their default, anchors is returned
+// unchanged. NodeType is matched via string(Node.Type); tracked state
+// reads Node.Metadata[MetaTrackedState]; scope is a path-prefix match
+// against Node.Path.
+func filterAnchors(anchors []*graph.Node, typeChip, trackedChip, scope string) []*graph.Node {
+	if typeChip == "" && trackedChip == "" && scope == "" {
+		return anchors
+	}
+	out := make([]*graph.Node, 0, len(anchors))
+	for _, n := range anchors {
+		if typeChip != "" && string(n.Type) != typeChip {
+			continue
+		}
+		if trackedChip == "Tracked only" && n.Metadata["tracked_state"] != "tracked" {
+			continue
+		}
+		if trackedChip == "Untracked only" && n.Metadata["tracked_state"] != "untracked" {
+			continue
+		}
+		if scope != "" && !scopeMatches(n, scope) {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+func scopeMatches(n *graph.Node, scope string) bool {
+	return n.Path == scope || strings.HasPrefix(n.Path, scope+"/")
+}
+
+// chipTypeValue returns the currently selected NodeType chip value, or
+// "" when no chip is set. Chip UI lands in sequence 03; this shim
+// returns "" so sequence 02 can wire filterAnchors without a circular
+// dependency on chip state.
+func chipTypeValue(Model) string { return "" }
+
+// chipTrackedValue returns the currently selected tracked-state chip
+// value, or "" when no chip is set. See chipTypeValue for the
+// sequencing note.
+func chipTrackedValue(Model) string { return "" }
 
 // resultGroup buckets search results that share a NodeType.
 type resultGroup struct {

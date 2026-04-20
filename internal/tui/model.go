@@ -99,6 +99,13 @@ type Model struct {
 	queryCancel context.CancelFunc
 	results     []search.QueryResult
 	groups      []resultGroup
+
+	// Empty-query fallback state. filteredAnchors is scopeAnchors
+	// after client-side chip/scope filtering; scope is the current
+	// scope-prefix filter ("" for unrestricted). Sequence 03 wires
+	// chips; sequence 04 wires scope.
+	filteredAnchors []*graph.Node
+	scope           string
 }
 
 // New creates a new TUI model from a populated graph. The browser
@@ -111,7 +118,7 @@ func New(ctx context.Context, store *graph.Store, g *graph.Graph) *Model {
 
 	nodes := g.Nodes()
 	anchors := collectScopeAnchors(g)
-	return &Model{
+	m := &Model{
 		ctx:            ctx,
 		store:          store,
 		querier:        search.NewQuerier(store.DB()),
@@ -123,6 +130,8 @@ func New(ctx context.Context, store *graph.Store, g *graph.Graph) *Model {
 		relationMode:   RelationHybrid,
 		showingAnchors: true,
 	}
+	m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(*m), chipTrackedValue(*m), m.scope)
+	return m
 }
 
 // Init implements tea.Model.
