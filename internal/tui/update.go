@@ -24,7 +24,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.results = msg.results
 		}
-		// TODO(task-05): m.groups = groupByType(m.results)
+		m.groups = groupByType(m.results)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -88,6 +88,7 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.queryCancel = nil
 		}
 		m.results = nil
+		m.groups = nil
 		return m, nil
 	case "enter":
 		m.searching = false
@@ -105,6 +106,7 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.queryCancel = nil
 		}
 		m.results = nil
+		m.groups = nil
 		return m, inputCmd
 	}
 

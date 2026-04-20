@@ -98,6 +98,7 @@ type Model struct {
 	queryGen    uint64
 	queryCancel context.CancelFunc
 	results     []search.QueryResult
+	groups      []resultGroup
 }
 
 // New creates a new TUI model from a populated graph. The browser
