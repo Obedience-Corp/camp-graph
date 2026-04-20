@@ -2,6 +2,8 @@
 package tui
 
 import (
+	"context"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -63,6 +65,8 @@ func (r RelationMode) Cycle() RelationMode {
 
 // Model is the BubbleTea model for the graph browser.
 type Model struct {
+	ctx   context.Context
+	store *graph.Store
 	graph *graph.Graph
 	// scopeAnchors is the scope-first default list shown when browse
 	// opens. It contains the campaign-root folder plus every
@@ -90,14 +94,16 @@ type Model struct {
 // New creates a new TUI model from a populated graph. The browser
 // opens on scope anchors rather than every node so users see campaign
 // buckets, repo roots, and user-authored top-level scopes first.
-func New(g *graph.Graph) Model {
+func New(ctx context.Context, store *graph.Store, g *graph.Graph) *Model {
 	ti := textinput.New()
 	ti.Placeholder = "search scopes/nodes..."
 	ti.CharLimit = 64
 
 	nodes := g.Nodes()
 	anchors := collectScopeAnchors(g)
-	return Model{
+	return &Model{
+		ctx:            ctx,
+		store:          store,
 		graph:          g,
 		nodes:          nodes,
 		scopeAnchors:   anchors,
