@@ -165,6 +165,11 @@ type Model struct {
 	// key in focusList.
 	countBuf string
 
+	// pendingG is true after a lone g keystroke; a second g triggers
+	// the "jump to top" action and any other key cancels the pending
+	// state.
+	pendingG bool
+
 	// Cached layout geometry (recomputed on tea.WindowSizeMsg).
 	layout   layoutMode
 	listW    int

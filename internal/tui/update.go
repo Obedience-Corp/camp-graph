@@ -83,6 +83,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	// Any non-g keystroke cancels a pending g. The g branch itself
+	// owns the pendingG lifecycle.
+	if key != "g" {
+		m.pendingG = false
+	}
+
 	// Vim-style count prefix: digits accumulate on countBuf until a
 	// motion consumes them. A bare leading 0 falls through so any
 	// 0-bound action still fires; today there is none, so 0 simply
@@ -121,9 +127,14 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.issuePreview()
 	case "g":
-		consumeCount(&m)
-		m.cursor = 0
-		return m, m.issuePreview()
+		if m.pendingG {
+			m.pendingG = false
+			consumeCount(&m)
+			m.cursor = 0
+			return m, m.issuePreview()
+		}
+		m.pendingG = true
+		return m, nil
 	case "G":
 		consumeCount(&m)
 		ceiling := len(m.filtered)
