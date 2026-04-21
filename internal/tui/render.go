@@ -242,7 +242,7 @@ func (m Model) renderGroupedList(width int) string {
 		}
 		for ri, r := range g.Rows {
 			if flat >= start && drawn < visibleLines {
-				line := renderRow(r, ri, gutterW, width, flat == m.cursor)
+				line := renderRow(r, ri, gutterW, width, flat == m.cursor, m.layout == layoutNarrow)
 				if lipgloss.Width(line) > width-2 {
 					line = line[:width-5] + "..."
 				}
@@ -314,7 +314,7 @@ func groupVisibleCount(groups []resultGroup) int {
 // tag, scope or relative path (truncated with a leading ellipsis when
 // it would exceed listW), and an optional match-reason suffix in
 // parentheses.
-func renderRow(r search.QueryResult, idx, gutterW, listW int, cursor bool) string {
+func renderRow(r search.QueryResult, idx, gutterW, listW int, cursor, narrow bool) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "%*d ", gutterW, idx+1)
@@ -328,16 +328,18 @@ func renderRow(r search.QueryResult, idx, gutterW, listW int, cursor bool) strin
 	typeTag := styleForType(graph.NodeType(r.NodeType)).Render("[" + r.NodeType + "]")
 	fmt.Fprintf(&b, "%s  %s", r.Title, typeTag)
 
-	path := r.Scope
-	if path == "" {
-		path = r.RelativePath
-	}
-	if path != "" {
-		remaining := listW - lipgloss.Width(b.String()) - 2
-		if remaining < 8 {
-			remaining = 8
+	if !narrow {
+		path := r.Scope
+		if path == "" {
+			path = r.RelativePath
 		}
-		fmt.Fprintf(&b, "  %s", truncatePath(path, remaining))
+		if path != "" {
+			remaining := listW - lipgloss.Width(b.String()) - 2
+			if remaining < 8 {
+				remaining = 8
+			}
+			fmt.Fprintf(&b, "  %s", truncatePath(path, remaining))
+		}
 	}
 
 	if len(r.Reasons) > 0 {

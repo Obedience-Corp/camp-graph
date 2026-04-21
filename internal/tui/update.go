@@ -129,6 +129,9 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "tab":
+		if m.layout == layoutNarrow {
+			return m, nil
+		}
 		if m.previewNode != nil {
 			m.focus = focusPreview
 			return m, nil
