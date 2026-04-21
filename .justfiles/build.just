@@ -1,6 +1,6 @@
 # Build recipes
 # SYNC: must match root justfile
-project_root := source_directory() / ".."
+project_root := justfile_directory()
 binary_name := "camp-graph"
 bin_dir := "bin"
 main_path := "./cmd/camp-graph"

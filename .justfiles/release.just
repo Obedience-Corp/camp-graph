@@ -1,5 +1,5 @@
 # Release recipes
-project_root := source_directory() / ".."
+project_root := justfile_directory()
 
 [private]
 default:

@@ -1,5 +1,5 @@
 # Test recipes
-project_root := source_directory() / ".."
+project_root := justfile_directory()
 BUILDTOOL := "bin/.buildutil"
 
 [private]
