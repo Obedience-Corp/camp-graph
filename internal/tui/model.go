@@ -9,7 +9,40 @@ import (
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
+	"github.com/Obedience-Corp/camp-graph/internal/tui/chips"
 )
+
+// chipBar groups the filter chips displayed above the result list.
+type chipBar struct {
+	Type    chips.Chip
+	Tracked chips.Chip
+	Mode    chips.Chip
+}
+
+// nodeTypeOptions is the authoritative list of NodeType strings the
+// Type chip exposes. Kept in sync with internal/graph NodeType
+// constants; UX order favors campaign artifacts above code types.
+var nodeTypeOptions = []string{
+	string(graph.NodeProject),
+	string(graph.NodeFestival),
+	string(graph.NodeChain),
+	string(graph.NodePhase),
+	string(graph.NodeSequence),
+	string(graph.NodeTask),
+	string(graph.NodeIntent),
+	string(graph.NodeDesignDoc),
+	string(graph.NodeExploreDoc),
+	string(graph.NodeNote),
+	string(graph.NodeCanvas),
+	string(graph.NodeTag),
+	string(graph.NodeAttachment),
+	string(graph.NodeRepo),
+	string(graph.NodeFolder),
+	string(graph.NodePackage),
+	string(graph.NodeTypeDef),
+	string(graph.NodeFunction),
+	string(graph.NodeFile),
+}
 
 type viewMode int
 
@@ -106,6 +139,8 @@ type Model struct {
 	// chips; sequence 04 wires scope.
 	filteredAnchors []*graph.Node
 	scope           string
+
+	chips chipBar
 }
 
 // New creates a new TUI model from a populated graph. The browser
@@ -129,6 +164,11 @@ func New(ctx context.Context, store *graph.Store, g *graph.Graph) *Model {
 		search:         ti,
 		relationMode:   RelationHybrid,
 		showingAnchors: true,
+		chips: chipBar{
+			Type:    chips.NewTypeChip(nodeTypeOptions),
+			Tracked: chips.NewTrackedChip(),
+			Mode:    chips.NewModeChip(),
+		},
 	}
 	m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(*m), chipTrackedValue(*m), m.scope)
 	return m

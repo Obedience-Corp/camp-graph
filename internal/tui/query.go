@@ -43,16 +43,25 @@ func scopeMatches(n *graph.Node, scope string) bool {
 	return n.Path == scope || strings.HasPrefix(n.Path, scope+"/")
 }
 
-// chipTypeValue returns the currently selected NodeType chip value, or
-// "" when no chip is set. Chip UI lands in sequence 03; this shim
-// returns "" so sequence 02 can wire filterAnchors without a circular
-// dependency on chip state.
-func chipTypeValue(Model) string { return "" }
+// chipTypeValue returns the currently selected NodeType chip value,
+// or "" when the chip is at its "All" default.
+func chipTypeValue(m Model) string {
+	v := m.chips.Type.SelectedValue()
+	if v == "" || v == "All" {
+		return ""
+	}
+	return v
+}
 
 // chipTrackedValue returns the currently selected tracked-state chip
-// value, or "" when no chip is set. See chipTypeValue for the
-// sequencing note.
-func chipTrackedValue(Model) string { return "" }
+// value, or "" when the chip is at its "All" default.
+func chipTrackedValue(m Model) string {
+	v := m.chips.Tracked.SelectedValue()
+	if v == "" || v == "All" {
+		return ""
+	}
+	return v
+}
 
 // resultGroup buckets search results that share a NodeType.
 type resultGroup struct {
@@ -146,11 +155,27 @@ type querierIface interface {
 }
 
 // buildOpts maps UI state on Model to a search.QueryOptions value.
-// Pure: no I/O, no pointer escape beyond the returned struct.
+// Pure: no I/O, no pointer escape beyond the returned struct. Chip
+// and scope fields are populated per the TUI_CONTRACT.md
+// QueryOptions mapping table; "All" / default chips map to zero values.
 func buildOpts(m Model) search.QueryOptions {
-	return search.QueryOptions{
-		Term: m.search.Value(),
+	opts := search.QueryOptions{
+		Term:  m.search.Value(),
+		Scope: m.scope,
 	}
+	if t := chipTypeValue(m); t != "" {
+		opts.Type = t
+	}
+	switch chipTrackedValue(m) {
+	case "Tracked only":
+		opts.Tracked = true
+	case "Untracked only":
+		opts.Untracked = true
+	}
+	if mode := m.chips.Mode.SelectedValue(); mode != "" {
+		opts.Mode = search.QueryMode(mode)
+	}
+	return opts
 }
 
 // queryResultMsg delivers the result of a live query issued via
