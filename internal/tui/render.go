@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -133,14 +134,16 @@ func lastPathSegment(p string) string {
 }
 
 func (m Model) renderList(width int) string {
+	if len(m.groups) > 0 {
+		return m.renderGroupedList(width)
+	}
 	var b strings.Builder
 
-	// Grouped FTS rendering lands in a later sequence; until then we
-	// fall through to list rendering with whichever slice is active:
-	// m.filteredAnchors for the empty-query fallback, otherwise
-	// m.filtered for legacy list/anchor views.
+	// List rendering with whichever slice is active: m.filteredAnchors
+	// for the empty-query fallback, otherwise m.filtered for legacy
+	// list/anchor views.
 	rows := m.filtered
-	if m.groups == nil && m.filteredAnchors != nil {
+	if m.filteredAnchors != nil {
 		rows = m.filteredAnchors
 	}
 
@@ -185,6 +188,114 @@ func (m Model) renderList(width int) string {
 
 func (m Model) renderDetail(width int) string {
 	return lipgloss.NewStyle().Width(width).Render(renderPreview(m, width, m.height))
+}
+
+// renderGroupedList renders m.groups as a stack of headers plus rows
+// (collapsed groups contribute only their header) with the shared
+// m.cursor used as a flat index over the visible entries.
+func (m Model) renderGroupedList(width int) string {
+	var b strings.Builder
+
+	header := titleStyle.Render("Graph Browser")
+	if m.searching {
+		header += " " + m.search.View()
+	}
+	total := 0
+	for _, g := range m.groups {
+		total += len(g.Rows)
+	}
+	header += fmt.Sprintf(" (%d results)", total)
+	b.WriteString(header + "\n\n")
+
+	visibleLines := max(1, m.height-4)
+	gutterW := len(strconv.Itoa(total))
+
+	flat := 0
+	drawn := 0
+	start := 0
+	if m.cursor >= visibleLines {
+		start = m.cursor - visibleLines + 1
+	}
+	for gi, g := range m.groups {
+		if flat >= start && drawn < visibleLines {
+			line := renderGroupHeader(g, flat == m.cursor)
+			if len(line) > width-2 {
+				line = line[:width-5] + "..."
+			}
+			b.WriteString(line + "\n")
+			drawn++
+		}
+		flat++
+		if !g.Expanded {
+			continue
+		}
+		for ri, r := range g.Rows {
+			if flat >= start && drawn < visibleLines {
+				line := renderRow(r, ri, gutterW, width, flat == m.cursor)
+				if lipgloss.Width(line) > width-2 {
+					line = line[:width-5] + "..."
+				}
+				b.WriteString(line + "\n")
+				drawn++
+			}
+			flat++
+			_ = gi
+		}
+	}
+
+	return lipgloss.NewStyle().Width(width).Render(b.String())
+}
+
+// renderGroupHeader builds a "<arrow> <type> (<count>)" header line
+// with a two-column cursor prefix. arrow is v for expanded, > for
+// collapsed.
+func renderGroupHeader(g resultGroup, cursor bool) string {
+	arrow := ">"
+	if g.Expanded {
+		arrow = "v"
+	}
+	prefix := "  "
+	if cursor {
+		prefix = "> "
+	}
+	return fmt.Sprintf("%s%s %s (%d)", prefix, arrow, g.Type, len(g.Rows))
+}
+
+// groupCursorTarget maps a flat cursor index over the group list into
+// (groupIdx, rowIdx). rowIdx == -1 means the cursor is on the group
+// header. Collapsed groups contribute only their header. Returns
+// (-1, -1) when cursor is out of range.
+func groupCursorTarget(groups []resultGroup, cursor int) (int, int) {
+	i := 0
+	for gi, g := range groups {
+		if cursor == i {
+			return gi, -1
+		}
+		i++
+		if !g.Expanded {
+			continue
+		}
+		for ri := range g.Rows {
+			if cursor == i {
+				return gi, ri
+			}
+			i++
+		}
+	}
+	return -1, -1
+}
+
+// groupVisibleCount returns the total number of visible entries
+// (headers plus rows in expanded groups) for navigation clamping.
+func groupVisibleCount(groups []resultGroup) int {
+	n := 0
+	for _, g := range groups {
+		n++
+		if g.Expanded {
+			n += len(g.Rows)
+		}
+	}
+	return n
 }
 
 // renderRow composes a single FTS result row for the list pane. The

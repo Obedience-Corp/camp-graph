@@ -67,7 +67,11 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.issuePreview()
 	case "down", "j":
-		if m.cursor < len(m.filtered)-1 {
+		ceiling := len(m.filtered)
+		if len(m.groups) > 0 {
+			ceiling = groupVisibleCount(m.groups)
+		}
+		if m.cursor < ceiling-1 {
 			m.cursor++
 		}
 		return m, m.issuePreview()
@@ -134,6 +138,13 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filtered = m.nodes
 		m.cursor = 0
 	case "enter":
+		if len(m.groups) > 0 {
+			gi, ri := groupCursorTarget(m.groups, m.cursor)
+			if gi >= 0 && ri == -1 {
+				m.groups[gi].Expanded = !m.groups[gi].Expanded
+				return m, nil
+			}
+		}
 		if len(m.filtered) > 0 {
 			m.enterMicrograph(m.filtered[m.cursor])
 		}
