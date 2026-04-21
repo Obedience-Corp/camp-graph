@@ -183,6 +183,9 @@ func (m Model) renderList(width int) string {
 }
 
 func (m Model) renderDetail(width int) string {
+	if m.previewFocusID != "" || m.previewNode != nil {
+		return lipgloss.NewStyle().Width(width).Render(renderPreview(m, width, m.height))
+	}
 	if len(m.filtered) == 0 || m.cursor >= len(m.filtered) {
 		return lipgloss.NewStyle().Width(width).Render("No node selected")
 	}
