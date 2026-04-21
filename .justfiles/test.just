@@ -1,4 +1,5 @@
 # Test recipes
+project_root := source_directory() / ".."
 BUILDTOOL := "bin/.buildutil"
 
 [private]
@@ -10,36 +11,36 @@ default:
 _buildtool:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd ..
+    cd "{{project_root}}"
     test -f {{BUILDTOOL}} || (mkdir -p bin && go build -o {{BUILDTOOL}} ./internal/buildutil)
 
 # Run all tests (unit + integration) with dashboard
 all: _buildtool
-    @cd .. && {{BUILDTOOL}} test
-    @cd .. && {{BUILDTOOL}} integration
+    @cd "{{project_root}}" && {{BUILDTOOL}} test
+    @cd "{{project_root}}" && {{BUILDTOOL}} integration
 
 # Run unit tests with dashboard
 unit: _buildtool
-    @cd .. && {{BUILDTOOL}} test
+    @cd "{{project_root}}" && {{BUILDTOOL}} test
 
 # Run tests with verbose output (standard go test)
 verbose:
-    cd .. && go test -race -cover -v ./...
+    cd "{{project_root}}" && go test -race -cover -v ./...
 
 # Run tests with coverage report
 coverage:
-    @cd .. && mkdir -p out
-    cd .. && go test -race -coverprofile=out/coverage.out ./...
-    cd .. && go tool cover -html=out/coverage.out -o out/coverage.html
+    @cd "{{project_root}}" && mkdir -p out
+    cd "{{project_root}}" && go test -race -coverprofile=out/coverage.out ./...
+    cd "{{project_root}}" && go tool cover -html=out/coverage.out -o out/coverage.html
     @echo "Coverage report: out/coverage.html"
 
 # Run short tests only
 short:
-    cd .. && go test -short ./...
+    cd "{{project_root}}" && go test -short ./...
 
 # Run benchmarks
 bench:
-    cd .. && go test -bench=. -benchmem ./...
+    cd "{{project_root}}" && go test -bench=. -benchmem ./...
 
 # ============================================
 # Integration Tests (require Docker/Colima)
@@ -47,13 +48,13 @@ bench:
 
 # Run integration tests with dashboard
 integration: _buildtool
-    @cd .. && {{BUILDTOOL}} integration
+    @cd "{{project_root}}" && {{BUILDTOOL}} integration
 
 # Run integration tests with verbose output (standard go test)
 integration-verbose:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd ..
+    cd "{{project_root}}"
     echo "Building Linux binary for containers..."
     mkdir -p bin/linux
     GOOS=linux GOARCH=$(go env GOARCH) go build -o bin/linux/camp-graph ./cmd/camp-graph
@@ -66,7 +67,7 @@ integration-verbose:
 integration-run TEST:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd ..
+    cd "{{project_root}}"
     echo "Building Linux binary for containers..."
     mkdir -p bin/linux
     GOOS=linux GOARCH=$(go env GOARCH) go build -o bin/linux/camp-graph ./cmd/camp-graph
@@ -79,7 +80,7 @@ integration-run TEST:
 integration-build:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd ..
+    cd "{{project_root}}"
     echo "Building Linux binary for containers..."
     mkdir -p bin/linux
     GOOS=linux GOARCH=$(go env GOARCH) go build -o bin/linux/camp-graph ./cmd/camp-graph

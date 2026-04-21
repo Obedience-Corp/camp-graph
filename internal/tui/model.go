@@ -230,6 +230,41 @@ func (m *Model) syncRelationMode() {
 	}
 }
 
+// visibleCeiling returns the number of navigable rows in the current
+// list view. The priority order matches focusedRowID and the render
+// path: grouped FTS results (counting headers + expanded rows) >
+// filteredAnchors > the unfiltered node list. Keeping the three
+// consumers (navigation clamps, queryResultMsg re-clamp, G/gg end
+// snap) on a single definition avoids off-by-one drift when the view
+// mode changes mid-session.
+func (m Model) visibleCeiling() int {
+	if len(m.groups) > 0 {
+		return groupVisibleCount(m.groups)
+	}
+	if m.filteredAnchors != nil {
+		return len(m.filteredAnchors)
+	}
+	return len(m.filtered)
+}
+
+// clampCursor forces m.cursor into [0, ceiling-1], collapsing to 0
+// when the view is empty. Call after any mutation that can shrink the
+// visible row set below the cursor (search completion, scope change,
+// filter change).
+func (m *Model) clampCursor() {
+	ceiling := m.visibleCeiling()
+	if ceiling <= 0 {
+		m.cursor = 0
+		return
+	}
+	if m.cursor >= ceiling {
+		m.cursor = ceiling - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+}
+
 // focusedRowID returns the ID of the row under the list cursor, or ""
 // when no row is focused (cursor out of range or sitting on a group
 // header). Mirrors the row-selection logic used by renderList:

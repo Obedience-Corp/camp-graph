@@ -80,19 +80,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Re-clamp the cursor to the new visible range so the list and
 		// the preview pane stay consistent when a query shrinks the
 		// result set below the previous cursor position.
-		ceiling := len(m.filteredAnchors)
-		if len(m.groups) > 0 {
-			ceiling = groupVisibleCount(m.groups)
-		} else if len(m.filtered) > 0 && m.filteredAnchors == nil {
-			ceiling = len(m.filtered)
-		}
-		if ceiling <= 0 {
-			m.cursor = 0
-		} else if m.cursor >= ceiling {
-			m.cursor = ceiling - 1
-		} else if m.cursor < 0 {
-			m.cursor = 0
-		}
+		m.clampCursor()
 		return m, nil
 
 	case previewMsg:
@@ -150,21 +138,12 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.pendingG = false
 		if key == "g" {
 			n := consumeCount(&m)
-			ceiling := len(m.filtered)
-			if len(m.groups) > 0 {
-				ceiling = groupVisibleCount(m.groups)
-			}
 			if n > 1 {
 				m.cursor = n - 1
 			} else {
 				m.cursor = 0
 			}
-			if m.cursor >= ceiling {
-				m.cursor = ceiling - 1
-			}
-			if m.cursor < 0 {
-				m.cursor = 0
-			}
+			m.clampCursor()
 			return m, m.issuePreview()
 		}
 		m.countBuf = ""
@@ -196,17 +175,8 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.issuePreview()
 	case "down", "j":
 		n := consumeCount(&m)
-		ceiling := len(m.filtered)
-		if len(m.groups) > 0 {
-			ceiling = groupVisibleCount(m.groups)
-		}
 		m.cursor += n
-		if m.cursor > ceiling-1 {
-			m.cursor = ceiling - 1
-		}
-		if m.cursor < 0 {
-			m.cursor = 0
-		}
+		m.clampCursor()
 		return m, m.issuePreview()
 	case "g":
 		if m.countBuf != "" {
@@ -218,11 +188,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.issuePreview()
 	case "G":
 		consumeCount(&m)
-		ceiling := len(m.filtered)
-		if len(m.groups) > 0 {
-			ceiling = groupVisibleCount(m.groups)
-		}
-		if ceiling > 0 {
+		if ceiling := m.visibleCeiling(); ceiling > 0 {
 			m.cursor = ceiling - 1
 		}
 		return m, m.issuePreview()
@@ -233,9 +199,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			step = 1
 		}
 		m.cursor -= step * n
-		if m.cursor < 0 {
-			m.cursor = 0
-		}
+		m.clampCursor()
 		return m, m.issuePreview()
 	case "ctrl+d":
 		n := consumeCount(&m)
@@ -243,17 +207,8 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if step < 1 {
 			step = 1
 		}
-		ceiling := len(m.filtered)
-		if len(m.groups) > 0 {
-			ceiling = groupVisibleCount(m.groups)
-		}
 		m.cursor += step * n
-		if m.cursor >= ceiling {
-			m.cursor = ceiling - 1
-			if m.cursor < 0 {
-				m.cursor = 0
-			}
-		}
+		m.clampCursor()
 		return m, m.issuePreview()
 	case "/":
 		m.searching = true
