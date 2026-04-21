@@ -42,8 +42,60 @@ func (m Model) View() string {
 	detail := m.renderDetail(detailWidth)
 
 	divider := strings.Repeat("│\n", max(1, m.height-2))
+	body := lipgloss.JoinHorizontal(lipgloss.Top, list, divider, detail)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, list, divider, detail)
+	header := m.renderHeader()
+	if header == "" {
+		return body
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, header, body)
+}
+
+// renderHeader builds the top-of-view stack: chip bar plus (if any chip
+// is off its default) an active-filters pill row. The search input
+// continues to render inside the list header; the chip bar sits
+// between the search input and the list per UX_SPEC.
+func (m Model) renderHeader() string {
+	bar := m.renderChipBar()
+	active := m.renderActiveFilters()
+	switch {
+	case bar == "" && active == "":
+		return ""
+	case active == "":
+		return bar
+	case bar == "":
+		return active
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, bar, active)
+}
+
+// renderChipBar returns a single-line horizontal join of the three
+// chip views.
+func (m Model) renderChipBar() string {
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		m.chips.Type.View(), " ",
+		m.chips.Tracked.View(), " ",
+		m.chips.Mode.View(),
+	)
+}
+
+// renderActiveFilters renders one pill per chip whose value is not its
+// default. Returns "" when all chips are at defaults.
+func (m Model) renderActiveFilters() string {
+	var pills []string
+	if m.chips.Type.IsActive() {
+		pills = append(pills, fmt.Sprintf("[Type: %s]", m.chips.Type.SelectedValue()))
+	}
+	if m.chips.Tracked.IsActive() {
+		pills = append(pills, fmt.Sprintf("[Tracked: %s]", m.chips.Tracked.SelectedValue()))
+	}
+	if m.chips.Mode.IsActive() {
+		pills = append(pills, fmt.Sprintf("[Mode: %s]", m.chips.Mode.SelectedValue()))
+	}
+	if len(pills) == 0 {
+		return ""
+	}
+	return breadcrumbStyle.Render(strings.Join(pills, " "))
 }
 
 func (m Model) renderList(width int) string {
