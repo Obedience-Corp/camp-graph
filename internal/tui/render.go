@@ -37,14 +37,25 @@ func (m Model) View() string {
 		return m.viewMicrograph()
 	}
 
-	listWidth := m.width / 2
-	detailWidth := m.width - listWidth - 1
+	listWidth := m.listW
+	if listWidth == 0 {
+		listWidth = m.width / 2
+	}
+	previewWidth := m.previewW
+	if previewWidth == 0 && m.layout != layoutNarrow {
+		previewWidth = m.width - listWidth - 1
+	}
 
 	list := m.renderList(listWidth)
-	detail := m.renderDetail(detailWidth)
 
-	divider := strings.Repeat("│\n", max(1, m.height-2))
-	body := lipgloss.JoinHorizontal(lipgloss.Top, list, divider, detail)
+	var body string
+	if m.layout == layoutNarrow {
+		body = list
+	} else {
+		detail := m.renderDetail(previewWidth)
+		divider := strings.Repeat("│\n", max(1, m.height-2))
+		body = lipgloss.JoinHorizontal(lipgloss.Top, list, divider, detail)
+	}
 
 	header := m.renderHeader()
 	view := body

@@ -160,6 +160,12 @@ type Model struct {
 	focus       focusMode
 	scopePicker scopePickerModel
 
+	// Cached layout geometry (recomputed on tea.WindowSizeMsg).
+	layout   layoutMode
+	listW    int
+	previewW int
+	listH    int
+
 	// Preview pane state.
 	previewFocusID string
 	previewCancel  context.CancelFunc

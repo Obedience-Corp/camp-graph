@@ -10,6 +10,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.layout = layoutFor(msg.Width)
+		m.listW, m.previewW, m.listH = paneSizes(m.layout, msg.Width, msg.Height)
 		return m, nil
 
 	case queryResultMsg:
