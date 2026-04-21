@@ -6,6 +6,19 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// quitModel cancels any in-flight query or preview fetch before the
+// program returns tea.Quit, so no Cmd goroutine outlives the UI.
+func quitModel(m *Model) {
+	if m.queryCancel != nil {
+		m.queryCancel()
+		m.queryCancel = nil
+	}
+	if m.previewCancel != nil {
+		m.previewCancel()
+		m.previewCancel = nil
+	}
+}
+
 // isExplorerFallback returns true when the view matches the UX_SPEC
 // empty-query fallback predicate: no search text, all chips at their
 // "All"/default values, and no scope set. Bindings like 'a' (widen
@@ -78,6 +91,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			quitModel(&m)
+			return m, tea.Quit
+		}
 		if m.searching {
 			return m.updateSearch(msg)
 		}
@@ -134,6 +151,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch key {
 	case "q", "ctrl+c":
+		quitModel(&m)
 		return m, tea.Quit
 	case "up", "k":
 		n := consumeCount(&m)
