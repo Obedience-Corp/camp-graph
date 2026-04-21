@@ -44,7 +44,11 @@ func (m *Model) issuePreview() tea.Cmd {
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.previewCancel = cancel
 	m.previewFocusID = id
-	return runPreviewCmd(ctx, m.store, m.graph, id)
+	fetcher := m.previewFetcher
+	if fetcher == nil {
+		fetcher = defaultPreviewFetcher{store: m.store, g: m.graph}
+	}
+	return runPreviewCmd(ctx, fetcher, id)
 }
 
 // renderPreviewEmpty returns the hint shown when no row is focused
@@ -147,31 +151,51 @@ func writeEdgeList(b *strings.Builder, edges []*graph.Edge, cap int) {
 	}
 }
 
+// previewFetcher is the narrow contract runPreviewCmd depends on.
+// The production implementation wraps *graph.Store and *graph.Graph;
+// tests substitute a stub to exercise cancellation without opening a
+// real database.
+type previewFetcher interface {
+	Fetch(ctx context.Context, id string) (*graph.Node, previewEdges, []search.RelatedItem, error)
+}
+
+// defaultPreviewFetcher is the production implementation backed by
+// the in-memory Graph (for edges and node lookup) plus the FTS-backed
+// search.Related query (for related rows).
+type defaultPreviewFetcher struct {
+	store *graph.Store
+	g     *graph.Graph
+}
+
+func (f defaultPreviewFetcher) Fetch(ctx context.Context, id string) (*graph.Node, previewEdges, []search.RelatedItem, error) {
+	node := f.g.Node(id)
+	edges := previewEdges{Out: f.g.EdgesFrom(id), In: f.g.EdgesTo(id)}
+	var related []search.RelatedItem
+	var err error
+	if node != nil && node.Path != "" {
+		related, err = search.Related(ctx, f.store.DB(), search.RelatedOptions{
+			Path:  node.Path,
+			Limit: 3,
+		})
+	}
+	return node, edges, related, err
+}
+
 // runPreviewCmd fetches node, outgoing and incoming edges, and related
-// rows for id and delivers them via a previewMsg. Edges are read from
-// the in-memory Graph; related rows come from the FTS-backed
-// search.Related query. ctx is owned by the caller and will be
-// cancelled when the Cmd is superseded by a newer focus target.
-func runPreviewCmd(ctx context.Context, store *graph.Store, g *graph.Graph, id string) tea.Cmd {
+// rows for id and delivers them via a previewMsg. The caller owns
+// ctx; when a newer focus target supersedes this fetch, the caller
+// cancels ctx and relies on the stale-drop in Update (id mismatch)
+// to discard the eventual message.
+func runPreviewCmd(ctx context.Context, f previewFetcher, id string) tea.Cmd {
 	return func() tea.Msg {
 		if id == "" {
 			return previewMsg{}
 		}
-		node := g.Node(id)
-		out := g.EdgesFrom(id)
-		in := g.EdgesTo(id)
-		var related []search.RelatedItem
-		var err error
-		if node != nil && node.Path != "" {
-			related, err = search.Related(ctx, store.DB(), search.RelatedOptions{
-				Path:  node.Path,
-				Limit: 3,
-			})
-		}
+		node, edges, related, err := f.Fetch(ctx, id)
 		return previewMsg{
 			id:      id,
 			node:    node,
-			edges:   previewEdges{Out: out, In: in},
+			edges:   edges,
 			related: related,
 			err:     err,
 		}

@@ -185,6 +185,7 @@ type Model struct {
 	previewEdges   previewEdges
 	previewRelated []search.RelatedItem
 	previewScroll  int
+	previewFetcher previewFetcher
 }
 
 // New creates a new TUI model from a populated graph. The browser
