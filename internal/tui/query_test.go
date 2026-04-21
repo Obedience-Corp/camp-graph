@@ -11,6 +11,7 @@ import (
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
+	"github.com/Obedience-Corp/camp-graph/internal/tui/chips"
 )
 
 type stubQuerier struct {
@@ -126,23 +127,51 @@ func TestQueryCancellation(t *testing.T) {
 
 func TestBuildOpts(t *testing.T) {
 	cases := []struct {
-		name string
-		term string
-		want search.QueryOptions
+		name       string
+		term       string
+		typeVal    string
+		trackedVal string
+		modeVal    string
+		want       search.QueryOptions
 	}{
-		{"empty", "", search.QueryOptions{Term: ""}},
-		{"whitespace", "   ", search.QueryOptions{Term: "   "}},
-		{"plain", "campaign", search.QueryOptions{Term: "campaign"}},
+		{"empty all defaults", "", "All", "All", "hybrid", search.QueryOptions{Term: "", Mode: search.QueryModeHybrid}},
+		{"term only", "foo", "All", "All", "hybrid", search.QueryOptions{Term: "foo", Mode: search.QueryModeHybrid}},
+		{"type set", "foo", "task", "All", "hybrid", search.QueryOptions{Term: "foo", Type: "task", Mode: search.QueryModeHybrid}},
+		{"tracked only", "foo", "All", "Tracked only", "hybrid", search.QueryOptions{Term: "foo", Tracked: true, Mode: search.QueryModeHybrid}},
+		{"untracked only", "foo", "All", "Untracked only", "hybrid", search.QueryOptions{Term: "foo", Untracked: true, Mode: search.QueryModeHybrid}},
+		{"mode structural", "foo", "All", "All", "structural", search.QueryOptions{Term: "foo", Mode: search.QueryModeStructural}},
+		{"mode explicit", "foo", "All", "All", "explicit", search.QueryOptions{Term: "foo", Mode: search.QueryModeExplicit}},
+		{"mode semantic", "foo", "All", "All", "semantic", search.QueryOptions{Term: "foo", Mode: search.QueryModeSemantic}},
+		{"all three set", "foo", "intent", "Untracked only", "semantic", search.QueryOptions{Term: "foo", Type: "intent", Untracked: true, Mode: search.QueryModeSemantic}},
+		{"whitespace term", "   ", "All", "All", "hybrid", search.QueryOptions{Term: "   ", Mode: search.QueryModeHybrid}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := Model{search: newTestInput(tc.term)}
+			m := Model{
+				search: newTestInput(tc.term),
+				chips: chipBar{
+					Type:    newTestChip("Type", []string{"All", "project", "festival", "task", "intent"}, tc.typeVal),
+					Tracked: newTestChip("Tracked", []string{"All", "Tracked only", "Untracked only"}, tc.trackedVal),
+					Mode:    newTestChip("Mode", []string{"hybrid", "structural", "explicit", "semantic"}, tc.modeVal),
+				},
+			}
 			got := buildOpts(m)
 			if got != tc.want {
 				t.Fatalf("buildOpts=%+v want %+v", got, tc.want)
 			}
 		})
 	}
+}
+
+func newTestChip(label string, options []string, selected string) chips.Chip {
+	c := chips.NewChip(label, options)
+	for i, opt := range options {
+		if opt == selected {
+			c.SetSelected(i)
+			break
+		}
+	}
+	return c
 }
 
 func TestGroupByType(t *testing.T) {
