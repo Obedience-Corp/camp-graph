@@ -27,6 +27,24 @@ type previewMsg struct {
 	err     error
 }
 
+// issuePreview cancels any in-flight preview fetch, derives a fresh
+// child context from m.ctx, and returns a runPreviewCmd targeting the
+// currently focused row. Returns nil when no row is focused so the
+// caller can skip batching a nil Cmd.
+func (m *Model) issuePreview() tea.Cmd {
+	id := m.focusedRowID()
+	if id == "" {
+		return nil
+	}
+	if m.previewCancel != nil {
+		m.previewCancel()
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.previewCancel = cancel
+	m.previewFocusID = id
+	return runPreviewCmd(ctx, m.store, m.graph, id)
+}
+
 // runPreviewCmd fetches node, outgoing and incoming edges, and related
 // rows for id and delivers them via a previewMsg. Edges are read from
 // the in-memory Graph; related rows come from the FTS-backed

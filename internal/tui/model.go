@@ -200,6 +200,31 @@ func New(ctx context.Context, store *graph.Store, g *graph.Graph) *Model {
 	return m
 }
 
+// focusedRowID returns the ID of the row under the list cursor, or ""
+// when no row is focused. Mirrors the row-selection logic used by
+// renderList: grouped FTS results (m.groups) win when present, then
+// m.filteredAnchors for the empty-query fallback, then m.filtered.
+func (m Model) focusedRowID() string {
+	if len(m.groups) > 0 {
+		cursor := m.cursor
+		for _, grp := range m.groups {
+			if cursor < len(grp.Rows) {
+				return grp.Rows[cursor].NodeID
+			}
+			cursor -= len(grp.Rows)
+		}
+		return ""
+	}
+	rows := m.filtered
+	if m.filteredAnchors != nil {
+		rows = m.filteredAnchors
+	}
+	if m.cursor < 0 || m.cursor >= len(rows) {
+		return ""
+	}
+	return rows[m.cursor].ID
+}
+
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
 	return tea.WindowSize()

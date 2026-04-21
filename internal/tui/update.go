@@ -25,6 +25,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.groups = groupByType(m.results)
 		return m, nil
 
+	case previewMsg:
+		if msg.id != m.focusedRowID() {
+			return m, nil
+		}
+		m.previewCancel = nil
+		m.previewNode = msg.node
+		m.previewEdges = msg.edges
+		m.previewRelated = msg.related
+		m.previewScroll = 0
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.searching {
 			return m.updateSearch(msg)
@@ -52,10 +63,35 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor > 0 {
 			m.cursor--
 		}
+		return m, m.issuePreview()
 	case "down", "j":
 		if m.cursor < len(m.filtered)-1 {
 			m.cursor++
 		}
+		return m, m.issuePreview()
+	case "g":
+		m.cursor = 0
+		return m, m.issuePreview()
+	case "G":
+		if n := len(m.filtered); n > 0 {
+			m.cursor = n - 1
+		}
+		return m, m.issuePreview()
+	case "ctrl+u":
+		m.cursor -= 10
+		if m.cursor < 0 {
+			m.cursor = 0
+		}
+		return m, m.issuePreview()
+	case "ctrl+d":
+		m.cursor += 10
+		if n := len(m.filtered); m.cursor >= n {
+			m.cursor = n - 1
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
+		}
+		return m, m.issuePreview()
 	case "/":
 		m.searching = true
 		m.focus = focusSearch
