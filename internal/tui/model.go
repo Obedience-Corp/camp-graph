@@ -231,19 +231,19 @@ func (m *Model) syncRelationMode() {
 }
 
 // focusedRowID returns the ID of the row under the list cursor, or ""
-// when no row is focused. Mirrors the row-selection logic used by
-// renderList: grouped FTS results (m.groups) win when present, then
+// when no row is focused (cursor out of range or sitting on a group
+// header). Mirrors the row-selection logic used by renderList:
+// grouped FTS results (m.groups) win when present, then
 // m.filteredAnchors for the empty-query fallback, then m.filtered.
+// Group traversal routes through groupCursorTarget so the three
+// cursor-to-row mappings (navigation clamp, render, preview) agree.
 func (m Model) focusedRowID() string {
 	if len(m.groups) > 0 {
-		cursor := m.cursor
-		for _, grp := range m.groups {
-			if cursor < len(grp.Rows) {
-				return grp.Rows[cursor].NodeID
-			}
-			cursor -= len(grp.Rows)
+		gi, ri := groupCursorTarget(m.groups, m.cursor)
+		if gi < 0 || ri < 0 {
+			return ""
 		}
-		return ""
+		return m.groups[gi].Rows[ri].NodeID
 	}
 	rows := m.filtered
 	if m.filteredAnchors != nil {

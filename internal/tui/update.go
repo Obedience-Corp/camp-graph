@@ -77,6 +77,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.results = msg.results
 		}
 		m.groups = groupByType(m.results)
+		// Re-clamp the cursor to the new visible range so the list and
+		// the preview pane stay consistent when a query shrinks the
+		// result set below the previous cursor position.
+		ceiling := len(m.filteredAnchors)
+		if len(m.groups) > 0 {
+			ceiling = groupVisibleCount(m.groups)
+		} else if len(m.filtered) > 0 && m.filteredAnchors == nil {
+			ceiling = len(m.filtered)
+		}
+		if ceiling <= 0 {
+			m.cursor = 0
+		} else if m.cursor >= ceiling {
+			m.cursor = ceiling - 1
+		} else if m.cursor < 0 {
+			m.cursor = 0
+		}
 		return m, nil
 
 	case previewMsg:
@@ -286,13 +302,28 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if len(m.groups) > 0 {
 			gi, ri := groupCursorTarget(m.groups, m.cursor)
-			if gi >= 0 && ri == -1 {
+			if gi < 0 {
+				return m, nil
+			}
+			if ri == -1 {
 				m.groups[gi].Expanded = !m.groups[gi].Expanded
 				return m, nil
 			}
+			// Resolve the focused query result against the in-memory
+			// graph so enterMicrograph receives a *graph.Node from the
+			// same set navigation is indexing, not an unrelated entry
+			// in m.filtered.
+			if n := m.graph.Node(m.groups[gi].Rows[ri].NodeID); n != nil {
+				m.enterMicrograph(n)
+			}
+			return m, nil
 		}
-		if len(m.filtered) > 0 {
-			m.enterMicrograph(m.filtered[m.cursor])
+		rows := m.filtered
+		if m.filteredAnchors != nil {
+			rows = m.filteredAnchors
+		}
+		if len(rows) > 0 && m.cursor >= 0 && m.cursor < len(rows) {
+			m.enterMicrograph(rows[m.cursor])
 		}
 	}
 	// Any key that falls through without consuming countBuf clears it
@@ -403,7 +434,7 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.results = nil
 		m.groups = nil
-		m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(m), chipTrackedValue(m), m.scope)
+		m.applyAnchorFilters()
 		return m, nil
 	case "enter":
 		m.searching = false
