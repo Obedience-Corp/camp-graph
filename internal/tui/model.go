@@ -164,7 +164,7 @@ type Model struct {
 	previewCancel  context.CancelFunc
 	previewNode    *graph.Node
 	previewEdges   previewEdges
-	previewRelated []search.QueryResult
+	previewRelated []search.RelatedItem
 	previewScroll  int
 }
 
