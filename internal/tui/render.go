@@ -33,6 +33,10 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	if m.focus == focusHelp {
+		return renderHelp(m.width, m.height)
+	}
+
 	if m.mode == modeMicrograph {
 		return m.viewMicrograph()
 	}

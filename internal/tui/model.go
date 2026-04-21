@@ -65,6 +65,7 @@ const (
 	focusModeChip
 	focusScopePicker
 	focusPreview
+	focusHelp
 )
 
 type neighborEntry struct {
@@ -158,6 +159,7 @@ type Model struct {
 
 	chips       chipBar
 	focus       focusMode
+	prevFocus   focusMode
 	scopePicker scopePickerModel
 
 	// countBuf accumulates leading digits as a vim-style count prefix

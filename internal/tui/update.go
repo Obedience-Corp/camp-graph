@@ -66,6 +66,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == modeMicrograph {
 			return m.updateMicrograph(msg)
 		}
+		if m.focus == focusHelp {
+			key := msg.String()
+			if key == "?" || key == "esc" {
+				m.focus = m.prevFocus
+			}
+			return m, nil
+		}
+		if msg.String() == "?" {
+			m.prevFocus = m.focus
+			m.focus = focusHelp
+			return m, nil
+		}
 		switch m.focus {
 		case focusTypeChip, focusTrackedChip, focusModeChip:
 			return m.updateChipFocus(msg)
