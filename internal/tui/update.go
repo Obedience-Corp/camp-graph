@@ -6,6 +6,24 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// isExplorerFallback returns true when the view matches the UX_SPEC
+// empty-query fallback predicate: no search text, all chips at their
+// "All"/default values, and no scope set. Bindings like 'a' (widen
+// anchors) only fire in this state so they do not mutate the list
+// under a live FTS query.
+func isExplorerFallback(m Model) bool {
+	if m.search.Value() != "" {
+		return false
+	}
+	if m.scope != "" {
+		return false
+	}
+	if m.chips.Type.IsActive() || m.chips.Tracked.IsActive() || m.chips.Mode.IsActive() {
+		return false
+	}
+	return true
+}
+
 // consumeCount parses and clears m.countBuf. Returns the parsed count
 // clamped to [1, 9999], defaulting to 1 when the buffer is empty or
 // unparseable. Always clears the buffer.
@@ -224,10 +242,15 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.relationMode = m.relationMode.Cycle()
 	case "a":
-		// Widen from scope anchors to all nodes on demand.
-		m.showingAnchors = false
-		m.filtered = m.nodes
-		m.cursor = 0
+		// Widen from scope anchors to all nodes, but only while the
+		// view is in the explorer fallback (no search text, chips at
+		// defaults, no scope). Outside that state 'a' is a no-op so
+		// it does not mutate the list under a live FTS query.
+		if isExplorerFallback(m) {
+			m.showingAnchors = false
+			m.filtered = m.nodes
+			m.cursor = 0
+		}
 	case "enter":
 		if len(m.groups) > 0 {
 			gi, ri := groupCursorTarget(m.groups, m.cursor)
