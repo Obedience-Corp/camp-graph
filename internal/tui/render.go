@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
+	"github.com/Obedience-Corp/camp-graph/internal/search"
 )
 
 // Styles for node type coloring.
@@ -184,6 +185,58 @@ func (m Model) renderList(width int) string {
 
 func (m Model) renderDetail(width int) string {
 	return lipgloss.NewStyle().Width(width).Render(renderPreview(m, width, m.height))
+}
+
+// renderRow composes a single FTS result row for the list pane. The
+// row layout is: gutter line number, cursor indicator, title, type
+// tag, scope or relative path (truncated with a leading ellipsis when
+// it would exceed listW), and an optional match-reason suffix in
+// parentheses.
+func renderRow(r search.QueryResult, idx, gutterW, listW int, cursor bool) string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "%*d ", gutterW, idx+1)
+
+	if cursor {
+		b.WriteString("> ")
+	} else {
+		b.WriteString("  ")
+	}
+
+	typeTag := styleForType(graph.NodeType(r.NodeType)).Render("[" + r.NodeType + "]")
+	fmt.Fprintf(&b, "%s  %s", r.Title, typeTag)
+
+	path := r.Scope
+	if path == "" {
+		path = r.RelativePath
+	}
+	if path != "" {
+		remaining := listW - lipgloss.Width(b.String()) - 2
+		if remaining < 8 {
+			remaining = 8
+		}
+		fmt.Fprintf(&b, "  %s", truncatePath(path, remaining))
+	}
+
+	if len(r.Reasons) > 0 {
+		fmt.Fprintf(&b, "  (%s)", r.Reasons[0])
+	}
+
+	return b.String()
+}
+
+// truncatePath keeps the rightmost characters when p exceeds max,
+// prefixing with "..." so the meaningful trailing segments stay
+// visible. Returns "..." when max is too small to show anything
+// useful.
+func truncatePath(p string, max int) string {
+	if len(p) <= max {
+		return p
+	}
+	if max <= 3 {
+		return "..."
+	}
+	return "..." + p[len(p)-(max-3):]
 }
 
 func styleForType(t graph.NodeType) lipgloss.Style {
