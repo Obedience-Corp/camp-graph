@@ -35,6 +35,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.focus {
 		case focusTypeChip, focusTrackedChip, focusModeChip:
 			return m.updateChipFocus(msg)
+		case focusScopePicker:
+			return m.updateScopePicker(msg)
 		}
 		return m.updateNormal(msg)
 	}
@@ -70,6 +72,11 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "m":
 		m.focus = focusModeChip
 		m.chips.Mode.Focus()
+		return m, nil
+	case "c":
+		m.focus = focusScopePicker
+		m.scopePicker.open = true
+		m.scopePicker.cursor = 0
 		return m, nil
 	case "tab":
 		m.relationMode = m.relationMode.Cycle()
@@ -129,6 +136,30 @@ func (m Model) updateChipFocus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, cmd
+}
+
+// updateScopePicker routes keys while the scope picker overlay owns
+// focus. esc closes without changing m.scope; enter applies the
+// highlighted option and reissues the query; other keys (j/k) are
+// forwarded to the picker's own Update for cursor movement.
+func (m Model) updateScopePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.scopePicker.open = false
+		m.focus = focusList
+		return m, nil
+	case "enter":
+		if sel := m.scopePicker.Selected(); sel != "" {
+			m.scope = sel
+		}
+		m.scopePicker.open = false
+		m.focus = focusList
+		return m, m.issueQuery()
+	default:
+		var cmd tea.Cmd
+		m.scopePicker, cmd = m.scopePicker.Update(msg)
+		return m, cmd
+	}
 }
 
 func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

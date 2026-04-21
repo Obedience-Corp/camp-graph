@@ -45,10 +45,16 @@ func (m Model) View() string {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, list, divider, detail)
 
 	header := m.renderHeader()
-	if header == "" {
-		return body
+	view := body
+	if header != "" {
+		view = lipgloss.JoinVertical(lipgloss.Left, header, body)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, header, body)
+
+	if m.scopePicker.open {
+		overlay := m.scopePicker.View()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlay, lipgloss.WithWhitespaceChars(" "))
+	}
+	return view
 }
 
 // renderHeader builds the top-of-view stack: chip bar plus (if any chip

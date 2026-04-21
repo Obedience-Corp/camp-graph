@@ -63,6 +63,7 @@ const (
 	focusTypeChip
 	focusTrackedChip
 	focusModeChip
+	focusScopePicker
 )
 
 type neighborEntry struct {
