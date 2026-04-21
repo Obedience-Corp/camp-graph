@@ -160,6 +160,11 @@ type Model struct {
 	focus       focusMode
 	scopePicker scopePickerModel
 
+	// countBuf accumulates leading digits as a vim-style count prefix
+	// for list navigation. Cleared by consumeCount or on any non-digit
+	// key in focusList.
+	countBuf string
+
 	// Cached layout geometry (recomputed on tea.WindowSizeMsg).
 	layout   layoutMode
 	listW    int

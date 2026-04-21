@@ -1,8 +1,29 @@
 package tui
 
 import (
+	"strconv"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// consumeCount parses and clears m.countBuf. Returns the parsed count
+// clamped to [1, 9999], defaulting to 1 when the buffer is empty or
+// unparseable. Always clears the buffer.
+func consumeCount(m *Model) int {
+	buf := m.countBuf
+	m.countBuf = ""
+	if buf == "" {
+		return 1
+	}
+	n, err := strconv.Atoi(buf)
+	if err != nil || n < 1 {
+		return 1
+	}
+	if n > 9999 {
+		return 9999
+	}
+	return n
+}
 
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -60,41 +81,75 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
+	key := msg.String()
+
+	// Vim-style count prefix: digits accumulate on countBuf until a
+	// motion consumes them. A bare leading 0 falls through so any
+	// 0-bound action still fires; today there is none, so 0 simply
+	// clears the buffer.
+	if len(key) == 1 && key[0] >= '0' && key[0] <= '9' {
+		if m.countBuf == "" && key == "0" {
+			m.countBuf = ""
+		} else {
+			m.countBuf += key
+			return m, nil
+		}
+	}
+
+	switch key {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
+		n := consumeCount(&m)
+		m.cursor -= n
+		if m.cursor < 0 {
+			m.cursor = 0
 		}
 		return m, m.issuePreview()
 	case "down", "j":
+		n := consumeCount(&m)
 		ceiling := len(m.filtered)
 		if len(m.groups) > 0 {
 			ceiling = groupVisibleCount(m.groups)
 		}
-		if m.cursor < ceiling-1 {
-			m.cursor++
+		m.cursor += n
+		if m.cursor > ceiling-1 {
+			m.cursor = ceiling - 1
+		}
+		if m.cursor < 0 {
+			m.cursor = 0
 		}
 		return m, m.issuePreview()
 	case "g":
+		consumeCount(&m)
 		m.cursor = 0
 		return m, m.issuePreview()
 	case "G":
-		if n := len(m.filtered); n > 0 {
-			m.cursor = n - 1
+		consumeCount(&m)
+		ceiling := len(m.filtered)
+		if len(m.groups) > 0 {
+			ceiling = groupVisibleCount(m.groups)
+		}
+		if ceiling > 0 {
+			m.cursor = ceiling - 1
 		}
 		return m, m.issuePreview()
 	case "ctrl+u":
-		m.cursor -= 10
+		n := consumeCount(&m)
+		m.cursor -= 10 * n
 		if m.cursor < 0 {
 			m.cursor = 0
 		}
 		return m, m.issuePreview()
 	case "ctrl+d":
-		m.cursor += 10
-		if n := len(m.filtered); m.cursor >= n {
-			m.cursor = n - 1
+		n := consumeCount(&m)
+		ceiling := len(m.filtered)
+		if len(m.groups) > 0 {
+			ceiling = groupVisibleCount(m.groups)
+		}
+		m.cursor += 10 * n
+		if m.cursor >= ceiling {
+			m.cursor = ceiling - 1
 			if m.cursor < 0 {
 				m.cursor = 0
 			}
@@ -154,6 +209,9 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.enterMicrograph(m.filtered[m.cursor])
 		}
 	}
+	// Any key that falls through without consuming countBuf clears it
+	// so stray input does not linger and corrupt the next motion.
+	m.countBuf = ""
 	return m, nil
 }
 
