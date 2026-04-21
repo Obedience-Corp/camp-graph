@@ -48,6 +48,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateChipFocus(msg)
 		case focusScopePicker:
 			return m.updateScopePicker(msg)
+		case focusPreview:
+			return m.updatePreviewFocus(msg)
 		}
 		return m.updateNormal(msg)
 	}
@@ -121,6 +123,10 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "tab":
+		if m.previewNode != nil {
+			m.focus = focusPreview
+			return m, nil
+		}
 		m.relationMode = m.relationMode.Cycle()
 	case "a":
 		// Widen from scope anchors to all nodes on demand.
@@ -178,6 +184,23 @@ func (m Model) updateChipFocus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, cmd
+}
+
+// updatePreviewFocus routes keys while the preview pane owns focus.
+// j/k scroll the pane without moving the list cursor or issuing a
+// preview Cmd; tab returns focus to the list.
+func (m Model) updatePreviewFocus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		m.previewScroll++
+	case "k", "up":
+		if m.previewScroll > 0 {
+			m.previewScroll--
+		}
+	case "tab":
+		m.focus = focusList
+	}
+	return m, nil
 }
 
 // updateScopePicker routes keys while the scope picker overlay owns

@@ -54,7 +54,8 @@ const previewEdgeCap = 50
 
 // renderPreview builds the preview pane body: node header (Name +
 // [Type]), path, optional status, outgoing edges (capped), incoming
-// edges (capped), and up to three related items.
+// edges (capped), and up to three related items. When focused, the
+// body is sliced by m.previewScroll lines from the top.
 func renderPreview(m Model, width, height int) string {
 	_ = width
 	_ = height
@@ -96,7 +97,16 @@ func renderPreview(m Model, width, height int) string {
 		fmt.Fprintf(&b, "  %s  [%s]\n", r.Title, r.NodeType)
 	}
 
-	return b.String()
+	body := b.String()
+	if m.previewScroll > 0 {
+		lines := strings.Split(body, "\n")
+		if m.previewScroll < len(lines) {
+			body = strings.Join(lines[m.previewScroll:], "\n")
+		} else {
+			body = ""
+		}
+	}
+	return body
 }
 
 // writeEdgeList writes up to cap edges as "<type> -> <toID>" lines
