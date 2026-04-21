@@ -78,6 +78,12 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.scopePicker.open = true
 		m.scopePicker.cursor = 0
 		return m, nil
+	case "C":
+		if m.scope != "" {
+			m.scope = ""
+			return m, m.issueQuery()
+		}
+		return m, nil
 	case "tab":
 		m.relationMode = m.relationMode.Cycle()
 	case "a":
