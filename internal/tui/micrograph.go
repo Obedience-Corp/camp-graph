@@ -22,9 +22,6 @@ func (m Model) updateMicrograph(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.microCursor < len(m.neighbors)-1 {
 			m.microCursor++
 		}
-	case "tab":
-		m.relationMode = m.relationMode.Cycle()
-		m.reloadNeighborsForFocus()
 	case "enter":
 		if len(m.neighbors) > 0 {
 			m.history = append(m.history, m.focusNode)

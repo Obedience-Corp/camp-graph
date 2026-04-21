@@ -19,8 +19,8 @@ var helpSections = []struct {
 		Rows: [][2]string{
 			{"j / down", "Move cursor down one row"},
 			{"k / up", "Move cursor up one row"},
-			{"Nj / Nk", "Move cursor N rows (count prefix)"},
-			{"gg", "Jump to first row"},
+			{"Ngg / Nj / Nk", "Move cursor N rows or jump to top (count prefix)"},
+			{"g / gg", "Jump to first row"},
 			{"G", "Jump to last row"},
 			{"ctrl+d", "Half-page down"},
 			{"ctrl+u", "Half-page up"},
@@ -31,7 +31,8 @@ var helpSections = []struct {
 		Section: "Search and filter",
 		Rows: [][2]string{
 			{"/", "Focus search input (live FTS)"},
-			{"esc", "Clear search or close overlay"},
+			{"enter (search)", "Exit input, keep query"},
+			{"esc (search)", "Clear query, unfocus input"},
 			{"t", "Focus Type chip"},
 			{"s", "Focus Tracked chip"},
 			{"m", "Focus Mode chip"},
@@ -43,6 +44,7 @@ var helpSections = []struct {
 		Section: "Actions on focused node",
 		Rows: [][2]string{
 			{"enter", "Open micrograph / expand group header"},
+			{"esc", "Exit micrograph back to prior state"},
 			{"a", "Widen from anchors to all nodes"},
 		},
 	},

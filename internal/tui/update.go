@@ -130,10 +130,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
-	// Any non-g keystroke cancels a pending g. The g branch itself
-	// owns the pendingG lifecycle.
-	if key != "g" {
+	if m.pendingG {
 		m.pendingG = false
+		if key == "g" {
+			n := consumeCount(&m)
+			ceiling := len(m.filtered)
+			if len(m.groups) > 0 {
+				ceiling = groupVisibleCount(m.groups)
+			}
+			if n > 1 {
+				m.cursor = n - 1
+			} else {
+				m.cursor = 0
+			}
+			if m.cursor >= ceiling {
+				m.cursor = ceiling - 1
+			}
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
+			return m, m.issuePreview()
+		}
+		m.countBuf = ""
 	}
 
 	// Vim-style count prefix: digits accumulate on countBuf until a
@@ -175,14 +193,13 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.issuePreview()
 	case "g":
-		if m.pendingG {
-			m.pendingG = false
-			consumeCount(&m)
-			m.cursor = 0
-			return m, m.issuePreview()
+		if m.countBuf != "" {
+			m.pendingG = true
+			return m, nil
 		}
-		m.pendingG = true
-		return m, nil
+		consumeCount(&m)
+		m.cursor = 0
+		return m, m.issuePreview()
 	case "G":
 		consumeCount(&m)
 		ceiling := len(m.filtered)
@@ -254,11 +271,8 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.layout == layoutNarrow {
 			return m, nil
 		}
-		if m.previewNode != nil {
-			m.focus = focusPreview
-			return m, nil
-		}
-		m.relationMode = m.relationMode.Cycle()
+		m.focus = focusPreview
+		return m, nil
 	case "a":
 		// Widen from scope anchors to all nodes, but only while the
 		// view is in the explorer fallback (no search text, chips at
@@ -325,6 +339,9 @@ func (m Model) updateChipFocus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		newValue = m.chips.Mode.SelectedValue()
 	}
 	if newValue != oldValue {
+		if m.focus == focusModeChip {
+			m.syncRelationMode()
+		}
 		if queryCmd := m.issueQuery(); queryCmd != nil {
 			return m, tea.Batch(cmd, queryCmd)
 		}

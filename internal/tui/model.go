@@ -75,8 +75,8 @@ type neighborEntry struct {
 }
 
 // RelationMode controls which edge-source classes are shown in the
-// micrograph and neighbor list. The default is RelationHybrid; pressing
-// tab cycles hybrid -> structural -> explicit -> semantic.
+// micrograph and neighbor list. The default is RelationHybrid and is
+// kept in sync with the Mode chip selection.
 type RelationMode int
 
 const (
@@ -166,10 +166,6 @@ type Model struct {
 	// for list navigation. Cleared by consumeCount or on any non-digit
 	// key in focusList.
 	countBuf string
-
-	// pendingG is true after a lone g keystroke; a second g triggers
-	// the "jump to top" action and any other key cancels the pending
-	// state.
 	pendingG bool
 
 	// Cached layout geometry (recomputed on tea.WindowSizeMsg).
@@ -216,8 +212,22 @@ func New(ctx context.Context, store *graph.Store, g *graph.Graph) *Model {
 		},
 		scopePicker: newScopePicker(anchors),
 	}
+	m.syncRelationMode()
 	m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(*m), chipTrackedValue(*m), m.scope)
 	return m
+}
+
+func (m *Model) syncRelationMode() {
+	switch m.chips.Mode.SelectedValue() {
+	case RelationStructural.String():
+		m.relationMode = RelationStructural
+	case RelationExplicit.String():
+		m.relationMode = RelationExplicit
+	case RelationSemantic.String():
+		m.relationMode = RelationSemantic
+	default:
+		m.relationMode = RelationHybrid
+	}
 }
 
 // focusedRowID returns the ID of the row under the list cursor, or ""
