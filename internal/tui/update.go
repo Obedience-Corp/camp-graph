@@ -147,18 +147,26 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.issuePreview()
 	case "ctrl+u":
 		n := consumeCount(&m)
-		m.cursor -= 10 * n
+		step := m.listH / 2
+		if step < 1 {
+			step = 1
+		}
+		m.cursor -= step * n
 		if m.cursor < 0 {
 			m.cursor = 0
 		}
 		return m, m.issuePreview()
 	case "ctrl+d":
 		n := consumeCount(&m)
+		step := m.listH / 2
+		if step < 1 {
+			step = 1
+		}
 		ceiling := len(m.filtered)
 		if len(m.groups) > 0 {
 			ceiling = groupVisibleCount(m.groups)
 		}
-		m.cursor += 10 * n
+		m.cursor += step * n
 		if m.cursor >= ceiling {
 			m.cursor = ceiling - 1
 			if m.cursor < 0 {
