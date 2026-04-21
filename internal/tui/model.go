@@ -154,8 +154,9 @@ type Model struct {
 	filteredAnchors []*graph.Node
 	scope           string
 
-	chips chipBar
-	focus focusMode
+	chips       chipBar
+	focus       focusMode
+	scopePicker scopePickerModel
 }
 
 // New creates a new TUI model from a populated graph. The browser
@@ -184,6 +185,7 @@ func New(ctx context.Context, store *graph.Store, g *graph.Graph) *Model {
 			Tracked: chips.NewTrackedChip(),
 			Mode:    chips.NewModeChip(),
 		},
+		scopePicker: newScopePicker(anchors),
 	}
 	m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(*m), chipTrackedValue(*m), m.scope)
 	return m
