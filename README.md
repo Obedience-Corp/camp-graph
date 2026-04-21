@@ -55,7 +55,7 @@ camp graph refresh --json
 # Machine-readable status for freshness and FTS availability
 camp graph status --json
 
-# Scope-first TUI browser (tab cycles hybrid -> structural -> explicit -> semantic)
+# FTS-backed live TUI browser with chips, scope picker, and preview pane
 camp graph browse
 
 # Focused neighborhood and rendering
@@ -77,6 +77,57 @@ tools can version-gate their parsers:
 
 Graph-database schema: `graphdb/v2alpha1`. A mismatch forces `refresh`
 to fall back to a full rebuild.
+
+## TUI browser (`camp-graph browse`)
+
+`camp-graph browse` is an FTS-backed terminal UI. With an empty query
+it opens the scope-anchor explorer; as soon as you type, cycle a
+chip, or pick a scope, the input routes through `internal/search`
+(`Querier.Search`) as a live query with per-keystroke generation
+cancellation so only the latest result set lands in the list.
+
+### Filters
+
+Three filter chips sit above the list:
+
+- **Type** (`t`) narrows to a single NodeType (project, festival,
+  task, intent, file, ...). Default is `All`.
+- **Tracked** (`s`) toggles between `All`, `Tracked only`, and
+  `Untracked only` (maps to `Querier.QueryOptions.Tracked` /
+  `Untracked`).
+- **Mode** (`m`) selects `hybrid`, `structural`, `explicit`, or
+  `semantic` ranking.
+
+A modal scope picker (`c`) restricts results to a path prefix; `C`
+clears the scope. Non-default chip values and the active scope
+render as pills in an active-filters row under the chip bar.
+
+### Preview pane
+
+The right pane shows node details for the row under the cursor:
+title + `[type]` header, path, optional status, outgoing edges
+(capped at 50, overflow collapses to `... +N more`), incoming edges
+(same cap), and the top 3 related items. Cursor moves cancel any
+in-flight fetch and issue a new one; `tab` toggles focus between
+list and preview so `j`/`k` scroll the pane without moving the list
+cursor.
+
+### Layout
+
+Three breakpoints adapt to terminal width:
+
+- **narrow** (`< 80` columns): preview pane hidden, list fills the
+  screen, row scope column suppressed.
+- **normal** (`80`-`120`): 60/40 list/preview split.
+- **wide** (`> 120`): 50/50 list/preview split.
+
+### Help
+
+`?` toggles a full-screen help overlay listing every binding;
+`esc` or a second `?` restores the prior focus.
+
+For the complete keybinding table see the `UX_SPEC.md` referenced
+by the festival plan (`festivals/.../002_PLAN/UX_SPEC.md`).
 
 ## Development
 
