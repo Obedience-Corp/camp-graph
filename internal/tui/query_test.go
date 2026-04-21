@@ -132,23 +132,27 @@ func TestBuildOpts(t *testing.T) {
 		typeVal    string
 		trackedVal string
 		modeVal    string
+		scope      string
 		want       search.QueryOptions
 	}{
-		{"empty all defaults", "", "All", "All", "hybrid", search.QueryOptions{Term: "", Mode: search.QueryModeHybrid}},
-		{"term only", "foo", "All", "All", "hybrid", search.QueryOptions{Term: "foo", Mode: search.QueryModeHybrid}},
-		{"type set", "foo", "task", "All", "hybrid", search.QueryOptions{Term: "foo", Type: "task", Mode: search.QueryModeHybrid}},
-		{"tracked only", "foo", "All", "Tracked only", "hybrid", search.QueryOptions{Term: "foo", Tracked: true, Mode: search.QueryModeHybrid}},
-		{"untracked only", "foo", "All", "Untracked only", "hybrid", search.QueryOptions{Term: "foo", Untracked: true, Mode: search.QueryModeHybrid}},
-		{"mode structural", "foo", "All", "All", "structural", search.QueryOptions{Term: "foo", Mode: search.QueryModeStructural}},
-		{"mode explicit", "foo", "All", "All", "explicit", search.QueryOptions{Term: "foo", Mode: search.QueryModeExplicit}},
-		{"mode semantic", "foo", "All", "All", "semantic", search.QueryOptions{Term: "foo", Mode: search.QueryModeSemantic}},
-		{"all three set", "foo", "intent", "Untracked only", "semantic", search.QueryOptions{Term: "foo", Type: "intent", Untracked: true, Mode: search.QueryModeSemantic}},
-		{"whitespace term", "   ", "All", "All", "hybrid", search.QueryOptions{Term: "   ", Mode: search.QueryModeHybrid}},
+		{"empty all defaults", "", "All", "All", "hybrid", "", search.QueryOptions{Term: "", Mode: search.QueryModeHybrid}},
+		{"term only", "foo", "All", "All", "hybrid", "", search.QueryOptions{Term: "foo", Mode: search.QueryModeHybrid}},
+		{"type set", "foo", "task", "All", "hybrid", "", search.QueryOptions{Term: "foo", Type: "task", Mode: search.QueryModeHybrid}},
+		{"tracked only", "foo", "All", "Tracked only", "hybrid", "", search.QueryOptions{Term: "foo", Tracked: true, Mode: search.QueryModeHybrid}},
+		{"untracked only", "foo", "All", "Untracked only", "hybrid", "", search.QueryOptions{Term: "foo", Untracked: true, Mode: search.QueryModeHybrid}},
+		{"mode structural", "foo", "All", "All", "structural", "", search.QueryOptions{Term: "foo", Mode: search.QueryModeStructural}},
+		{"mode explicit", "foo", "All", "All", "explicit", "", search.QueryOptions{Term: "foo", Mode: search.QueryModeExplicit}},
+		{"mode semantic", "foo", "All", "All", "semantic", "", search.QueryOptions{Term: "foo", Mode: search.QueryModeSemantic}},
+		{"all three set", "foo", "intent", "Untracked only", "semantic", "", search.QueryOptions{Term: "foo", Type: "intent", Untracked: true, Mode: search.QueryModeSemantic}},
+		{"whitespace term", "   ", "All", "All", "hybrid", "", search.QueryOptions{Term: "   ", Mode: search.QueryModeHybrid}},
+		{"scope only with term", "foo", "All", "All", "hybrid", "projects/camp", search.QueryOptions{Term: "foo", Mode: search.QueryModeHybrid, Scope: "projects/camp"}},
+		{"scope plus type", "foo", "task", "All", "hybrid", "projects/camp", search.QueryOptions{Term: "foo", Type: "task", Mode: search.QueryModeHybrid, Scope: "projects/camp"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := Model{
 				search: newTestInput(tc.term),
+				scope:  tc.scope,
 				chips: chipBar{
 					Type:    newTestChip("Type", []string{"All", "project", "festival", "task", "intent"}, tc.typeVal),
 					Tracked: newTestChip("Tracked", []string{"All", "Tracked only", "Untracked only"}, tc.trackedVal),
