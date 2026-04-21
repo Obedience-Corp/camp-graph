@@ -51,6 +51,20 @@ const (
 	modeMicrograph
 )
 
+// focusMode identifies which UI element currently owns keyboard focus.
+// focusSearch aliases the legacy m.searching bool so the two stay
+// consistent; chip focus states route keys to the respective chip's
+// Update method.
+type focusMode int
+
+const (
+	focusList focusMode = iota
+	focusSearch
+	focusTypeChip
+	focusTrackedChip
+	focusModeChip
+)
+
 type neighborEntry struct {
 	node      *graph.Node
 	edge      *graph.Edge
@@ -141,6 +155,7 @@ type Model struct {
 	scope           string
 
 	chips chipBar
+	focus focusMode
 }
 
 // New creates a new TUI model from a populated graph. The browser

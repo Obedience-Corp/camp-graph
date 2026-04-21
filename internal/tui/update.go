@@ -34,6 +34,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == modeMicrograph {
 			return m.updateMicrograph(msg)
 		}
+		switch m.focus {
+		case focusTypeChip, focusTrackedChip, focusModeChip:
+			return m.updateChipFocus(msg)
+		}
 		return m.updateNormal(msg)
 	}
 
@@ -54,8 +58,21 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "/":
 		m.searching = true
+		m.focus = focusSearch
 		m.search.Focus()
 		return m, m.search.Cursor.BlinkCmd()
+	case "t":
+		m.focus = focusTypeChip
+		m.chips.Type.Focus()
+		return m, nil
+	case "s":
+		m.focus = focusTrackedChip
+		m.chips.Tracked.Focus()
+		return m, nil
+	case "m":
+		m.focus = focusModeChip
+		m.chips.Mode.Focus()
+		return m, nil
 	case "tab":
 		m.relationMode = m.relationMode.Cycle()
 	case "a":
@@ -63,17 +80,42 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showingAnchors = false
 		m.filtered = m.nodes
 		m.cursor = 0
-	case "s":
-		// Return to scope-anchor view.
-		m.showingAnchors = true
-		m.filtered = m.scopeAnchors
-		m.cursor = 0
 	case "enter":
 		if len(m.filtered) > 0 {
 			m.enterMicrograph(m.filtered[m.cursor])
 		}
 	}
 	return m, nil
+}
+
+// updateChipFocus routes a keystroke to the currently focused chip.
+// On esc, the chip is blurred and focus returns to the list without
+// reissuing a query. Other keys are forwarded to the chip's Update;
+// the re-issue-on-change hookup lands in task 05.
+func (m Model) updateChipFocus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "esc" {
+		switch m.focus {
+		case focusTypeChip:
+			m.chips.Type.Blur()
+		case focusTrackedChip:
+			m.chips.Tracked.Blur()
+		case focusModeChip:
+			m.chips.Mode.Blur()
+		}
+		m.focus = focusList
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	switch m.focus {
+	case focusTypeChip:
+		m.chips.Type, cmd = m.chips.Type.Update(msg)
+	case focusTrackedChip:
+		m.chips.Tracked, cmd = m.chips.Tracked.Update(msg)
+	case focusModeChip:
+		m.chips.Mode, cmd = m.chips.Mode.Update(msg)
+	}
+	return m, cmd
 }
 
 func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
