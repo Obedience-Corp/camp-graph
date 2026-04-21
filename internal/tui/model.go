@@ -158,6 +158,14 @@ type Model struct {
 	chips       chipBar
 	focus       focusMode
 	scopePicker scopePickerModel
+
+	// Preview pane state.
+	previewFocusID string
+	previewCancel  context.CancelFunc
+	previewNode    *graph.Node
+	previewEdges   previewEdges
+	previewRelated []search.QueryResult
+	previewScroll  int
 }
 
 // New creates a new TUI model from a populated graph. The browser
