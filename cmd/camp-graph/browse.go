@@ -42,7 +42,7 @@ var browseCmd = &cobra.Command{
 			return graphErrors.Wrap(err, "load graph")
 		}
 
-		model := tui.New(g)
+		model := tui.New(ctx, store, g)
 		p := tea.NewProgram(model, tea.WithAltScreen())
 		_, err = p.Run()
 		return err

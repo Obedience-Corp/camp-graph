@@ -1,4 +1,5 @@
 # Test recipes
+project_root := justfile_directory()
 BUILDTOOL := "bin/.buildutil"
 
 [private]
@@ -7,58 +8,53 @@ default:
 
 # Ensure buildutil binary is compiled
 [private]
-[no-cd]
 _buildtool:
-    @test -f {{BUILDTOOL}} || (mkdir -p bin && go build -o {{BUILDTOOL}} ./internal/buildutil)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{project_root}}"
+    test -f {{BUILDTOOL}} || (mkdir -p bin && go build -o {{BUILDTOOL}} ./internal/buildutil)
 
 # Run all tests (unit + integration) with dashboard
-[no-cd]
 all: _buildtool
-    @{{BUILDTOOL}} test
-    @{{BUILDTOOL}} integration
+    @cd "{{project_root}}" && {{BUILDTOOL}} test
+    @cd "{{project_root}}" && {{BUILDTOOL}} integration
 
 # Run unit tests with dashboard
-[no-cd]
 unit: _buildtool
-    @{{BUILDTOOL}} test
+    @cd "{{project_root}}" && {{BUILDTOOL}} test
 
 # Run tests with verbose output (standard go test)
-[no-cd]
 verbose:
-    go test -race -cover -v ./...
+    cd "{{project_root}}" && go test -race -cover -v ./...
 
 # Run tests with coverage report
-[no-cd]
 coverage:
-    @mkdir -p out
-    go test -race -coverprofile=out/coverage.out ./...
-    go tool cover -html=out/coverage.out -o out/coverage.html
+    @cd "{{project_root}}" && mkdir -p out
+    cd "{{project_root}}" && go test -race -coverprofile=out/coverage.out ./...
+    cd "{{project_root}}" && go tool cover -html=out/coverage.out -o out/coverage.html
     @echo "Coverage report: out/coverage.html"
 
 # Run short tests only
-[no-cd]
 short:
-    go test -short ./...
+    cd "{{project_root}}" && go test -short ./...
 
 # Run benchmarks
-[no-cd]
 bench:
-    go test -bench=. -benchmem ./...
+    cd "{{project_root}}" && go test -bench=. -benchmem ./...
 
 # ============================================
 # Integration Tests (require Docker/Colima)
 # ============================================
 
 # Run integration tests with dashboard
-[no-cd]
 integration: _buildtool
-    @{{BUILDTOOL}} integration
+    @cd "{{project_root}}" && {{BUILDTOOL}} integration
 
 # Run integration tests with verbose output (standard go test)
-[no-cd]
 integration-verbose:
     #!/usr/bin/env bash
     set -euo pipefail
+    cd "{{project_root}}"
     echo "Building Linux binary for containers..."
     mkdir -p bin/linux
     GOOS=linux GOARCH=$(go env GOARCH) go build -o bin/linux/camp-graph ./cmd/camp-graph
@@ -68,10 +64,10 @@ integration-verbose:
     go test -v -count=1 -tags=integration ./tests/integration/... -timeout 5m 2>&1
 
 # Run a specific integration test
-[no-cd]
 integration-run TEST:
     #!/usr/bin/env bash
     set -euo pipefail
+    cd "{{project_root}}"
     echo "Building Linux binary for containers..."
     mkdir -p bin/linux
     GOOS=linux GOARCH=$(go env GOARCH) go build -o bin/linux/camp-graph ./cmd/camp-graph
@@ -81,9 +77,11 @@ integration-run TEST:
     go test -v -count=1 -tags=integration ./tests/integration/... -run "{{TEST}}" -timeout 5m
 
 # Build Linux binary for integration tests (useful for debugging)
-[no-cd]
 integration-build:
-    @echo "Building Linux binary for containers..."
-    @mkdir -p bin/linux
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{project_root}}"
+    echo "Building Linux binary for containers..."
+    mkdir -p bin/linux
     GOOS=linux GOARCH=$(go env GOARCH) go build -o bin/linux/camp-graph ./cmd/camp-graph
-    @echo "Built bin/linux/camp-graph"
+    echo "Built bin/linux/camp-graph"

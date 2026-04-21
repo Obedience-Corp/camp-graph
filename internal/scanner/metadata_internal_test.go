@@ -140,8 +140,8 @@ func TestIsPhaseDirEdgeCases(t *testing.T) {
 		{"999_X", true},
 		{"00_short", false}, // only 2 digits
 		{"abc_invalid", false},
-		{"12", false},       // too short
-		{"123X", false},     // 4th char not underscore
+		{"12", false},   // too short
+		{"123X", false}, // 4th char not underscore
 		{"", false},
 	}
 	for _, tc := range tests {

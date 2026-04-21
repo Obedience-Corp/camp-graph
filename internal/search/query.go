@@ -161,8 +161,8 @@ func applyModeBoost(mode QueryMode, results []QueryResult) {
 		return
 	}
 	const (
-		scopeBoost = 1.5
-		tokenBoost = 1.35
+		scopeBoost  = 1.5
+		tokenBoost  = 1.35
 		hybridBoost = 1.2
 	)
 	for i := range results {
