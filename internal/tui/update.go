@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"context"
-
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -106,14 +104,29 @@ func (m Model) updateChipFocus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var cmd tea.Cmd
+	var (
+		cmd      tea.Cmd
+		oldValue string
+		newValue string
+	)
 	switch m.focus {
 	case focusTypeChip:
+		oldValue = m.chips.Type.SelectedValue()
 		m.chips.Type, cmd = m.chips.Type.Update(msg)
+		newValue = m.chips.Type.SelectedValue()
 	case focusTrackedChip:
+		oldValue = m.chips.Tracked.SelectedValue()
 		m.chips.Tracked, cmd = m.chips.Tracked.Update(msg)
+		newValue = m.chips.Tracked.SelectedValue()
 	case focusModeChip:
+		oldValue = m.chips.Mode.SelectedValue()
 		m.chips.Mode, cmd = m.chips.Mode.Update(msg)
+		newValue = m.chips.Mode.SelectedValue()
+	}
+	if newValue != oldValue {
+		if queryCmd := m.issueQuery(); queryCmd != nil {
+			return m, tea.Batch(cmd, queryCmd)
+		}
 	}
 	return m, cmd
 }
@@ -142,25 +155,9 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var inputCmd tea.Cmd
 	m.search, inputCmd = m.search.Update(msg)
 
-	opts := buildOpts(m)
-	if opts.Term == "" {
-		if m.queryCancel != nil {
-			m.queryCancel()
-			m.queryCancel = nil
-		}
-		m.results = nil
-		m.groups = nil
-		m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(m), chipTrackedValue(m), m.scope)
+	queryCmd := m.issueQuery()
+	if queryCmd == nil {
 		return m, inputCmd
 	}
-
-	m.queryGen++
-	if m.queryCancel != nil {
-		m.queryCancel()
-	}
-	ctx, cancel := context.WithCancel(m.ctx)
-	m.queryCancel = cancel
-	queryCmd := runQueryCmd(ctx, m.querier, opts, m.queryGen)
-
 	return m, tea.Batch(inputCmd, queryCmd)
 }

@@ -196,3 +196,35 @@ func runQueryCmd(ctx context.Context, q querierIface, opts search.QueryOptions, 
 		return queryResultMsg{gen: gen, results: results, err: err}
 	}
 }
+
+// issueQuery bumps the query generation, cancels any in-flight query,
+// and returns a Cmd that issues a fresh FTS search for the current
+// Model state. Empty terms short-circuit: results are cleared,
+// anchor filters are applied client-side, and nil is returned so no
+// backend call is made (per UX_SPEC empty-query fallback / D005).
+// This is the single pipeline used by both search-input keystrokes and
+// chip value changes.
+func (m *Model) issueQuery() tea.Cmd {
+	opts := buildOpts(*m)
+	if m.queryCancel != nil {
+		m.queryCancel()
+		m.queryCancel = nil
+	}
+	if opts.Term == "" {
+		m.results = nil
+		m.groups = nil
+		m.applyAnchorFilters()
+		return nil
+	}
+	m.queryGen++
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.queryCancel = cancel
+	return runQueryCmd(ctx, m.querier, opts, m.queryGen)
+}
+
+// applyAnchorFilters refreshes m.filteredAnchors using the current
+// chip and scope state. Mode is intentionally ignored here since it
+// affects ranking, not membership, per UX_SPEC.
+func (m *Model) applyAnchorFilters() {
+	m.filteredAnchors = filterAnchors(m.scopeAnchors, chipTypeValue(*m), chipTrackedValue(*m), m.scope)
+}
