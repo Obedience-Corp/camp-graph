@@ -47,6 +47,23 @@ func (m *Model) issuePreview() tea.Cmd {
 	return runPreviewCmd(ctx, m.store, m.graph, id)
 }
 
+// renderPreviewEmpty returns the hint shown when no row is focused
+// yet (zero-value Model, empty result list, or after the user clears
+// all filters without selecting a row).
+func renderPreviewEmpty(width, height int) string {
+	_ = width
+	_ = height
+	return "move the cursor to preview a node\n\ntab to focus this pane, tab again to return"
+}
+
+// renderPreviewLoading is shown while a preview fetch Cmd is in
+// flight for the currently focused row id.
+func renderPreviewLoading(width, height int) string {
+	_ = width
+	_ = height
+	return "loading preview..."
+}
+
 // previewEdgeCap limits how many edges are rendered per direction in
 // the preview pane. Overflow past the cap collapses to a "... +N more"
 // footer line so long edge lists do not push related rows off-screen.
@@ -61,9 +78,9 @@ func renderPreview(m Model, width, height int) string {
 	_ = height
 	if m.previewNode == nil {
 		if m.previewFocusID != "" {
-			return "Loading preview..."
+			return renderPreviewLoading(width, height)
 		}
-		return "No node selected"
+		return renderPreviewEmpty(width, height)
 	}
 	n := m.previewNode
 	var b strings.Builder

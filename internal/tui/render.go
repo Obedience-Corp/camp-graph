@@ -183,54 +183,7 @@ func (m Model) renderList(width int) string {
 }
 
 func (m Model) renderDetail(width int) string {
-	if m.previewFocusID != "" || m.previewNode != nil {
-		return lipgloss.NewStyle().Width(width).Render(renderPreview(m, width, m.height))
-	}
-	if len(m.filtered) == 0 || m.cursor >= len(m.filtered) {
-		return lipgloss.NewStyle().Width(width).Render("No node selected")
-	}
-
-	n := m.filtered[m.cursor]
-	var b strings.Builder
-
-	b.WriteString(titleStyle.Render("Detail") + "\n\n")
-	b.WriteString(detailLabelStyle.Render("Name:   ") + n.Name + "\n")
-	b.WriteString(detailLabelStyle.Render("Type:   ") + string(n.Type) + "\n")
-	b.WriteString(detailLabelStyle.Render("Path:   ") + n.Path + "\n")
-	if n.Status != "" {
-		b.WriteString(detailLabelStyle.Render("Status: ") + n.Status + "\n")
-	}
-
-	if len(n.Metadata) > 0 {
-		b.WriteString("\n" + detailLabelStyle.Render("Metadata:") + "\n")
-		for k, v := range n.Metadata {
-			b.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
-		}
-	}
-
-	neighbors := m.graph.Neighbors(n.ID)
-	if len(neighbors) > 0 {
-		b.WriteString(fmt.Sprintf("\n"+detailLabelStyle.Render("Neighbors (%d):")+"\n", len(neighbors)))
-		edges := m.graph.EdgesFrom(n.ID)
-		for _, e := range edges {
-			target := m.graph.Node(e.ToID)
-			if target != nil {
-				b.WriteString(fmt.Sprintf("  → %s (%s)\n", target.Name, e.Type))
-			}
-		}
-		edgesTo := m.graph.EdgesTo(n.ID)
-		for _, e := range edgesTo {
-			source := m.graph.Node(e.FromID)
-			if source != nil {
-				b.WriteString(fmt.Sprintf("  ← %s (%s)\n", source.Name, e.Type))
-			}
-		}
-	}
-
-	b.WriteString("\n" + defaultStyle.Render(
-		"enter: micrograph  ↑↓/jk: navigate  /: search  tab: cycle relation  a: all  s: scopes  q: quit"))
-
-	return lipgloss.NewStyle().Width(width).Render(b.String())
+	return lipgloss.NewStyle().Width(width).Render(renderPreview(m, width, m.height))
 }
 
 func styleForType(t graph.NodeType) lipgloss.Style {
