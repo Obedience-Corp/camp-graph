@@ -86,7 +86,8 @@ func (m Model) renderChipBar() string {
 }
 
 // renderActiveFilters renders one pill per chip whose value is not its
-// default. Returns "" when all chips are at defaults.
+// default, plus a Scope pill when m.scope is set. Returns "" when all
+// filters are at defaults and no scope is selected.
 func (m Model) renderActiveFilters() string {
 	var pills []string
 	if m.chips.Type.IsActive() {
@@ -98,10 +99,36 @@ func (m Model) renderActiveFilters() string {
 	if m.chips.Mode.IsActive() {
 		pills = append(pills, fmt.Sprintf("[Mode: %s]", m.chips.Mode.SelectedValue()))
 	}
+	if m.scope != "" {
+		pills = append(pills, fmt.Sprintf("[Scope: %s]", m.scopeLabel()))
+	}
 	if len(pills) == 0 {
 		return ""
 	}
 	return breadcrumbStyle.Render(strings.Join(pills, " "))
+}
+
+const narrowWidth = 80
+
+// scopeLabel renders m.scope for the active-filters pill, falling
+// back to the last path segment on narrow terminals and truncating
+// long paths to keep the row within a reasonable width.
+func (m Model) scopeLabel() string {
+	if m.width > 0 && m.width < narrowWidth {
+		return lastPathSegment(m.scope)
+	}
+	const maxPill = 60
+	if len(m.scope) <= maxPill {
+		return m.scope
+	}
+	return "..." + m.scope[len(m.scope)-(maxPill-3):]
+}
+
+func lastPathSegment(p string) string {
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 func (m Model) renderList(width int) string {
