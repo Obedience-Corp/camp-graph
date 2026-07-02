@@ -53,10 +53,10 @@ func TestFocusedRowIDWalksHeadersWhenGroupsExpanded(t *testing.T) {
 		cursor int
 		want   string
 	}{
-		{0, ""},             // header: task
-		{1, "task:task-1"},  // first task row
-		{2, "task:task-2"},  // second task row
-		{3, ""},             // header: file
+		{0, ""},            // header: task
+		{1, "task:task-1"}, // first task row
+		{2, "task:task-2"}, // second task row
+		{3, ""},            // header: file
 		{4, "file:a/one.go"},
 		{5, "file:a/two.go"},
 	}

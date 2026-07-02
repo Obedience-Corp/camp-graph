@@ -18,10 +18,10 @@ func TestInference_MultiFileRelationshipsQueryable(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/_placeholder/.keep": "",
-				"Work/JobSearch/plan.md":      "---\ntype: daily\ntags: [planning]\n---\n\n# plan\nBody #planning.\n",
-				"Work/JobSearch/recap.md":     "---\ntype: daily\ntags: [planning]\n---\n\n# recap\nBody #planning.\n",
-				"Work/JobSearch/kickoff.md":   "---\ntype: reference\n---\n\n# kickoff\n",
+				"projects/_placeholder/.keep":    "",
+				"Work/JobSearch/plan.md":         "---\ntype: daily\ntags: [planning]\n---\n\n# plan\nBody #planning.\n",
+				"Work/JobSearch/recap.md":        "---\ntype: daily\ntags: [planning]\n---\n\n# recap\nBody #planning.\n",
+				"Work/JobSearch/kickoff.md":      "---\ntype: reference\n---\n\n# kickoff\n",
 				"Business/ShinySwap/readme.md":   "---\ntype: reference\n---\n\n# readme\n",
 				"Business/ShinySwap/strategy.md": "---\ntype: reference\n---\n\n# strategy\n",
 			},

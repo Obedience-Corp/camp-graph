@@ -18,10 +18,10 @@ func TestRender_ScopeSlice(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/_placeholder/.keep":   "",
-				"Work/JobSearch/plan.md":        "# plan\n",
-				"Work/JobSearch/kickoff.md":     "# kickoff\n",
-				"Business/ShinySwap/readme.md":  "# readme\n",
+				"projects/_placeholder/.keep":  "",
+				"Work/JobSearch/plan.md":       "# plan\n",
+				"Work/JobSearch/kickoff.md":    "# kickoff\n",
+				"Business/ShinySwap/readme.md": "# readme\n",
 			},
 		},
 	}

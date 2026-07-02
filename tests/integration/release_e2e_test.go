@@ -21,12 +21,12 @@ func TestReleaseE2E_BuildQueryRefreshStatusRelated(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/_placeholder/.keep":                     "",
-				".campaign/intents/inbox/idea.md":                 "# idea\n",
-				"festivals/active/release-fest/FESTIVAL_GOAL.md":  "# goal\n",
-				"Work/JobSearch/Action Plan.md":                   "# Action Plan\n\nRoadmap for my job search.\n",
-				"Work/JobSearch/Kickoff.md":                       "# Kickoff\n\nFirst week.\n",
-				"Business/ShinySwap/notes.md":                     "# Shiny notes\n",
+				"projects/_placeholder/.keep":                    "",
+				".campaign/intents/inbox/idea.md":                "# idea\n",
+				"festivals/active/release-fest/FESTIVAL_GOAL.md": "# goal\n",
+				"Work/JobSearch/Action Plan.md":                  "# Action Plan\n\nRoadmap for my job search.\n",
+				"Work/JobSearch/Kickoff.md":                      "# Kickoff\n\nFirst week.\n",
+				"Business/ShinySwap/notes.md":                    "# Shiny notes\n",
 			},
 		},
 	}

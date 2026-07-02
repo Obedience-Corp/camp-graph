@@ -39,10 +39,10 @@ func TestQueryJSON_FindsBuriedContentBySearchTerm(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/_placeholder/.keep":      "",
-				"Work/JobSearch/Action Plan.md":    "# Action Plan\n\nRoadmap for my job search and planning.\n",
-				"Work/JobSearch/Remote Listings.md":"# Listings\n\nRemote role ideas.\n",
-				"Business/ShinySwap/notes.md":      "# Shiny\n\nBody unrelated content.\n",
+				"projects/_placeholder/.keep":       "",
+				"Work/JobSearch/Action Plan.md":     "# Action Plan\n\nRoadmap for my job search and planning.\n",
+				"Work/JobSearch/Remote Listings.md": "# Listings\n\nRemote role ideas.\n",
+				"Business/ShinySwap/notes.md":       "# Shiny\n\nBody unrelated content.\n",
 			},
 		},
 	}
@@ -111,9 +111,9 @@ func TestQueryJSON_ScopeFilterNarrowsResults(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/_placeholder/.keep":  "",
-				"Work/JobSearch/plan.md":       "# plan\nBody plan.\n",
-				"Business/ShinySwap/plan.md":   "# plan\nBody plan in shiny.\n",
+				"projects/_placeholder/.keep": "",
+				"Work/JobSearch/plan.md":      "# plan\nBody plan.\n",
+				"Business/ShinySwap/plan.md":  "# plan\nBody plan in shiny.\n",
 			},
 		},
 	}
@@ -146,7 +146,7 @@ func TestQueryJSON_TypeFilter(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/_placeholder/.keep":  "",
+				"projects/_placeholder/.keep":     "",
 				".campaign/intents/inbox/idea.md": "# idea note\n",
 				"Work/idea-notes.md":              "# idea notes\n",
 			},

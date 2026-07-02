@@ -38,9 +38,21 @@ build: _buildtool
 build-only: _buildtool
     @{{BUILDTOOL}} build-only
 
-# Format Go code
+# Check Go code is gofmt-formatted (fails on unformatted files)
 fmt:
-    go fmt ./...
+    #!/usr/bin/env bash
+    set -euo pipefail
+    unformatted=$(gofmt -l .)
+    if [[ -n "$unformatted" ]]; then
+        echo "The following files are not gofmt-formatted:"
+        echo "$unformatted"
+        echo "Run 'just fmt-fix' to fix."
+        exit 1
+    fi
+
+# Rewrite Go code to be gofmt-formatted (same whole-module scope as the fmt gate)
+fmt-fix:
+    gofmt -w .
 
 # Run go vet
 vet:
