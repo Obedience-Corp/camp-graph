@@ -50,9 +50,9 @@ fmt:
         exit 1
     fi
 
-# Rewrite Go code to be gofmt-formatted
+# Rewrite Go code to be gofmt-formatted (same whole-module scope as the fmt gate)
 fmt-fix:
-    go fmt ./...
+    gofmt -w .
 
 # Run go vet
 vet:
