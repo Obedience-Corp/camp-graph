@@ -42,7 +42,7 @@ build-only: _buildtool
 fmt:
     #!/usr/bin/env bash
     set -euo pipefail
-    unformatted=$(gofmt -l internal cmd)
+    unformatted=$(gofmt -l .)
     if [[ -n "$unformatted" ]]; then
         echo "The following files are not gofmt-formatted:"
         echo "$unformatted"

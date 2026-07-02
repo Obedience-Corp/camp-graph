@@ -30,8 +30,8 @@ func TestContentExtraction_ObsidianVaultBuild(t *testing.T) {
 				"Notes/Plan.md": "---\ntitle: Master Plan\naliases: [plan, roadmap]\ntags: [planning, ok-2026]\n---\n\n# Plan\n" +
 					"Depends on [[OKRs]]. See [background](background.md).\n" +
 					"Tagged inline: #strategy.\n",
-				"Notes/background.md": "---\ntitle: Background\n---\n\n# bg\nBody.\n",
-				"Work/OKRs.md":        "---\ntitle: OKRs\ntags: [ok-2026]\n---\n\n# Q1 OKRs\nSee [[Plan]].\n",
+				"Notes/background.md":    "---\ntitle: Background\n---\n\n# bg\nBody.\n",
+				"Work/OKRs.md":           "---\ntitle: OKRs\ntags: [ok-2026]\n---\n\n# Q1 OKRs\nSee [[Plan]].\n",
 				"Canvas/strategy.canvas": canvasBody,
 				"Assets/diagram.png":     "PNG\n",
 				"Notes/with-image.md":    "![diagram](../Assets/diagram.png)\n",

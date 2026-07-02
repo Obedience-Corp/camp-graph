@@ -19,7 +19,7 @@ func TestInventoryRegression_NestedRepoBuild(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/alpha/README.md":                          "# alpha\n",
+				"projects/alpha/README.md":                           "# alpha\n",
 				"festivals/active/test-fest-TF0001/FESTIVAL_GOAL.md": "# goal\n",
 				".campaign/intents/inbox/idea.md":                    "# idea\n",
 			},
@@ -65,8 +65,8 @@ func TestInventoryRegression_SubmoduleBuild(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/placeholder/.keep":       "",
-				".campaign/intents/inbox/seed.md":  "# seed\n",
+				"projects/placeholder/.keep":      "",
+				".campaign/intents/inbox/seed.md": "# seed\n",
 			},
 		},
 		{

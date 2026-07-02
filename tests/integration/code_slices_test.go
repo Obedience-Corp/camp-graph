@@ -25,9 +25,9 @@ func TestCodeSlices_BoundedToNestedRepos(t *testing.T) {
 		{
 			Path: "/campaign/projects/subrepo",
 			TrackedFiles: map[string]string{
-				"cmd/main.go":            "package main\nfunc main(){}\n",
-				"internal/util/util.go":  "package util\nfunc Helper(){}\n",
-				"README.md":              "# readme\n",
+				"cmd/main.go":           "package main\nfunc main(){}\n",
+				"internal/util/util.go": "package util\nfunc Helper(){}\n",
+				"README.md":             "# readme\n",
 			},
 		},
 	}

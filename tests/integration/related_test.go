@@ -35,11 +35,11 @@ func TestRelatedJSON_ScopeAndLinkEnrichment(t *testing.T) {
 		{
 			Path: "/campaign",
 			TrackedFiles: map[string]string{
-				"projects/_placeholder/.keep":     "",
-				"Work/JobSearch/Action Plan.md":   "# Action Plan\n\nSee [Kickoff](Kickoff.md) for details.\n",
-				"Work/JobSearch/Kickoff.md":       "# Kickoff\n\nFirst week notes.\n",
-				"Work/JobSearch/Remote.md":        "# Remote Listings\n\nBody.\n",
-				"Business/ShinySwap/readme.md":    "# Shiny\n\nUnrelated.\n",
+				"projects/_placeholder/.keep":   "",
+				"Work/JobSearch/Action Plan.md": "# Action Plan\n\nSee [Kickoff](Kickoff.md) for details.\n",
+				"Work/JobSearch/Kickoff.md":     "# Kickoff\n\nFirst week notes.\n",
+				"Work/JobSearch/Remote.md":      "# Remote Listings\n\nBody.\n",
+				"Business/ShinySwap/readme.md":  "# Shiny\n\nUnrelated.\n",
 			},
 		},
 	}
