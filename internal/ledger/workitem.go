@@ -39,7 +39,9 @@ func buildWorkitemIndex(campaignRoot string, g *graph.Graph) workitemIndex {
 	}
 
 	// Walk workflow/ for .workitem markers to learn ref + stable id.
-	// Depth-limited so dungeon archives do not dominate cold start.
+	// Skip VCS/tooling dirs and bound depth so dungeon archives cannot
+	// dominate cold start on huge campaigns.
+	const maxWorkitemWalkDepth = 8 // workflow/<type>/... up to nested design packs
 	workflowRoot := filepath.Join(campaignRoot, "workflow")
 	_ = filepath.WalkDir(workflowRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -47,9 +49,15 @@ func buildWorkitemIndex(campaignRoot string, g *graph.Graph) workitemIndex {
 		}
 		if d.IsDir() {
 			base := d.Name()
-			// Skip deep tooling / VCS noise.
 			if base == ".git" || base == "node_modules" {
 				return filepath.SkipDir
+			}
+			rel, relErr := filepath.Rel(workflowRoot, path)
+			if relErr == nil && rel != "." {
+				depth := 1 + strings.Count(filepath.ToSlash(rel), "/")
+				if depth > maxWorkitemWalkDepth {
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		}

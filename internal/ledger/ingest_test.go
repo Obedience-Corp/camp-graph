@@ -261,6 +261,34 @@ func TestSourceAndConfidence(t *testing.T) {
 	}
 }
 
+func TestIngest_ReconciledSelfKindDoesNotLoop(t *testing.T) {
+	root := t.TempDir()
+	seedCampaign(t, root)
+	g := baseGraph()
+	writeEvents(t, root, []map[string]any{
+		{
+			"v": 1, "id": "rc-loop", "ts": "2026-07-12T16:00:00Z",
+			"kind": "reconciled",
+			"scope": map[string]any{
+				"campaign": "camp-1",
+				"intent":   "demo-intent",
+			},
+			"actor":   map[string]any{"type": "unknown"},
+			"payload": map[string]any{"kind": "reconciled", "note": "self"},
+			"source":  "reconciled",
+		},
+	})
+	// Must return; a regression that re-dispatches reconciled→reconciled
+	// would hang or stack overflow without the depth/self-kind guard.
+	rep, err := Ingest(context.Background(), root, g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.EventsApplied != 1 {
+		t.Fatalf("applied=%d want 1", rep.EventsApplied)
+	}
+}
+
 func baseGraph() *graph.Graph {
 	g := graph.New()
 	// Festival matches directory name form used by the scanner.
