@@ -24,13 +24,16 @@ func (s *ingestState) annotateArtifact(ev *ledgerkit.Event, ts time.Time, src gr
 	if status := payloadString(ev.Payload, "status"); status != "" {
 		n.Status = status
 	}
-	if target := payloadString(ev.Payload, "target"); target != "" && subtype == "transitioned" {
-		n.Status = target
-	}
-	if to := payloadString(ev.Payload, "to"); to != "" && n.Status == "" {
-		// Prefer the trailing path segment as a coarse status when no
-		// explicit target/status is present.
-		n.Status = path.Base(to)
+	if subtype == "transitioned" {
+		// A transition's destination ("to") is the artifact's new status;
+		// path.Base normalizes dungeon aliases like "dungeon/completed".
+		// The "target" payload names the artifact kind or action being
+		// transitioned (e.g. "festival", "reset", "blocked"), not a status --
+		// reading it here recorded every transitioned festival as status
+		// "festival" and every reset task as "reset".
+		if to := payloadString(ev.Payload, "to"); to != "" {
+			n.Status = path.Base(to)
+		}
 	}
 	n.UpdatedAt = ts
 	if n.CreatedAt.IsZero() || n.CreatedAt.After(ts) {
