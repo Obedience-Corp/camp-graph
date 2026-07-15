@@ -16,7 +16,7 @@ const (
 	// GraphSchemaVersion is the persistent graph DB schema version
 	// stored in graph_meta.graph_schema_version. Bumps force full
 	// rebuilds via the refresh flow.
-	GraphSchemaVersion = "graphdb/v2alpha1"
+	GraphSchemaVersion = "graphdb/v3alpha1"
 	// QueryResultSchemaVersion is the on-wire schema tag embedded in
 	// query --json payloads.
 	QueryResultSchemaVersion = "graph-query/v1alpha1"

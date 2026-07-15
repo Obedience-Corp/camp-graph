@@ -15,14 +15,14 @@ func TestStore_MetaSetGetRoundTrip(t *testing.T) {
 	}
 	defer store.Close()
 
-	if err := store.SetMeta(ctx, "graph_schema_version", "graphdb/v2alpha1"); err != nil {
+	if err := store.SetMeta(ctx, "graph_schema_version", "graphdb/v3alpha1"); err != nil {
 		t.Fatalf("set meta: %v", err)
 	}
 	if err := store.SetMeta(ctx, "search_available", "true"); err != nil {
 		t.Fatalf("set search_available: %v", err)
 	}
 	// Overwrite to exercise upsert path.
-	if err := store.SetMeta(ctx, "graph_schema_version", "graphdb/v2alpha1"); err != nil {
+	if err := store.SetMeta(ctx, "graph_schema_version", "graphdb/v3alpha1"); err != nil {
 		t.Fatalf("re-set meta: %v", err)
 	}
 
@@ -30,8 +30,8 @@ func TestStore_MetaSetGetRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get meta: %v", err)
 	}
-	if val != "graphdb/v2alpha1" {
-		t.Errorf("graph_schema_version: got %q, want %q", val, "graphdb/v2alpha1")
+	if val != "graphdb/v3alpha1" {
+		t.Errorf("graph_schema_version: got %q, want %q", val, "graphdb/v3alpha1")
 	}
 
 	missing, err := store.GetMeta(ctx, "does_not_exist")
@@ -49,9 +49,9 @@ func TestStore_MetaSetGetRoundTrip(t *testing.T) {
 	if all["search_available"] != "true" {
 		t.Errorf("AllMeta search_available: got %q, want %q", all["search_available"], "true")
 	}
-	if all["graph_schema_version"] != "graphdb/v2alpha1" {
+	if all["graph_schema_version"] != "graphdb/v3alpha1" {
 		t.Errorf("AllMeta graph_schema_version: got %q, want %q",
-			all["graph_schema_version"], "graphdb/v2alpha1")
+			all["graph_schema_version"], "graphdb/v3alpha1")
 	}
 }
 

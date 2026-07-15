@@ -169,7 +169,7 @@ func TestStatusJSON_PayloadShape(t *testing.T) {
 	if env.SchemaVersion != "graph-status/v1alpha1" {
 		t.Errorf("schema: got %q", env.SchemaVersion)
 	}
-	if env.GraphSchemaVersion != "graphdb/v2alpha1" {
+	if env.GraphSchemaVersion != "graphdb/v3alpha1" {
 		t.Errorf("graph_schema_version: got %q", env.GraphSchemaVersion)
 	}
 	if !env.SearchAvailable {

@@ -100,5 +100,10 @@ func runRefresh(cmd *cobra.Command, _ []string) error {
 		report.Mode, report.ReindexedFiles, report.DeletedFiles,
 		report.NodesWritten, report.EdgesWritten, report.SearchDocsWritten,
 		report.DurationMs)
+	if report.Ledger != nil && report.Ledger.EventsRead > 0 {
+		fmt.Fprintf(os.Stdout, "ledger events=%d applied=%d nodes_added=%d edges_added=%d unknown_kinds=%d\n",
+			report.Ledger.EventsRead, report.Ledger.EventsApplied,
+			report.Ledger.NodesAdded, report.Ledger.EdgesAdded, report.Ledger.UnknownKinds)
+	}
 	return nil
 }

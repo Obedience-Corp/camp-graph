@@ -11,6 +11,7 @@ import (
 
 	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
+	"github.com/Obedience-Corp/camp-graph/internal/ledger"
 	"github.com/Obedience-Corp/camp-graph/internal/runtime"
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
@@ -40,7 +41,18 @@ var buildCmd = &cobra.Command{
 		if err != nil {
 			return graphErrors.Wrap(err, "scan failed")
 		}
+
+		// D008: ledger is a deterministic scan source re-read on every rebuild.
+		ledgerReport, err := ledger.Ingest(ctx, root, g)
+		if err != nil {
+			return graphErrors.Wrap(err, "ledger ingest")
+		}
 		printScanSummary(g)
+		if ledgerReport != nil && ledgerReport.EventsRead > 0 {
+			fmt.Printf("  Ledger:        %d events (%d applied, +%d nodes, +%d edges)\n",
+				ledgerReport.EventsRead, ledgerReport.EventsApplied,
+				ledgerReport.NodesAdded, ledgerReport.EdgesAdded)
+		}
 
 		dbPath := outputPath
 		if dbPath == "" {
@@ -98,6 +110,9 @@ var indexableArtifactTypes = map[graph.NodeType]bool{
 	graph.NodeIntent:     true,
 	graph.NodeDesignDoc:  true,
 	graph.NodeExploreDoc: true,
+	// Ledger-derived causal anchors (D008).
+	graph.NodeDecision: true,
+	graph.NodeAction:   true,
 	// Code-slice nodes emitted by extractCodeSlices inside nested repos.
 	// Indexing them lets `query --type file|package` return matches that
 	// the CLI docs already advertise.
@@ -301,6 +316,7 @@ func printScanSummary(g *graph.Graph) {
 		graph.NodeProject, graph.NodeFestival, graph.NodeChain,
 		graph.NodePhase, graph.NodeSequence, graph.NodeTask,
 		graph.NodeIntent, graph.NodeDesignDoc, graph.NodeExploreDoc,
+		graph.NodeDecision, graph.NodeAction,
 	}
 	for _, t := range types {
 		count := len(g.NodesByType(t))
