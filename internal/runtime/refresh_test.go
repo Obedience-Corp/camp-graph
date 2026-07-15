@@ -42,7 +42,7 @@ func TestRefresh_FreshDBForcesRebuild(t *testing.T) {
 		BuildDocs:    func(g *graph.Graph) ([]graph.DocumentRecord, error) { return nil, nil },
 		BuildMetaFn: func(mode runtime.RefreshMode, now time.Time, searchAvailable bool) graph.BuildMeta {
 			return graph.BuildMeta{
-				GraphSchemaVersion: "graphdb/v2alpha1",
+				GraphSchemaVersion: "graphdb/v3alpha1",
 				CampaignRoot:       root,
 				SearchAvailable:    searchAvailable,
 			}
@@ -78,7 +78,7 @@ func TestRefresh_SecondRunReportsRefreshMode(t *testing.T) {
 
 	buildMeta := func(mode runtime.RefreshMode, _ time.Time, searchAvailable bool) graph.BuildMeta {
 		return graph.BuildMeta{
-			GraphSchemaVersion: "graphdb/v2alpha1",
+			GraphSchemaVersion: "graphdb/v3alpha1",
 			CampaignRoot:       root,
 			SearchAvailable:    searchAvailable,
 		}
@@ -144,7 +144,7 @@ func TestRefresh_DeletedFileCounted(t *testing.T) {
 
 	buildMeta := func(mode runtime.RefreshMode, _ time.Time, searchAvailable bool) graph.BuildMeta {
 		return graph.BuildMeta{
-			GraphSchemaVersion: "graphdb/v2alpha1",
+			GraphSchemaVersion: "graphdb/v3alpha1",
 			CampaignRoot:       root,
 			SearchAvailable:    searchAvailable,
 		}
@@ -187,7 +187,7 @@ func TestRefresh_ParityWithClearRebuild(t *testing.T) {
 
 	buildMeta := func(mode runtime.RefreshMode, _ time.Time, searchAvailable bool) graph.BuildMeta {
 		return graph.BuildMeta{
-			GraphSchemaVersion: "graphdb/v2alpha1",
+			GraphSchemaVersion: "graphdb/v3alpha1",
 			CampaignRoot:       root,
 			SearchAvailable:    searchAvailable,
 		}
@@ -263,7 +263,7 @@ func TestRefresh_NoChangesSkipsFullRebuild(t *testing.T) {
 
 	buildMeta := func(mode runtime.RefreshMode, _ time.Time, searchAvailable bool) graph.BuildMeta {
 		return graph.BuildMeta{
-			GraphSchemaVersion: "graphdb/v2alpha1",
+			GraphSchemaVersion: "graphdb/v3alpha1",
 			CampaignRoot:       root,
 			SearchAvailable:    searchAvailable,
 		}

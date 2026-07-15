@@ -25,11 +25,10 @@ const (
 )
 
 // KnownCompatibleSchemas enumerates schema strings that the current
-// release accepts. graphdb/v2alpha1 is the first upgraded schema
-// string for the workspace-graph redesign; older strings (or missing
-// values) force a rebuild.
+// release accepts. graphdb/v3alpha1 adds ledger-derived decision/action
+// nodes and causal edges (D008); older strings force a rebuild.
 var KnownCompatibleSchemas = map[string]bool{
-	"graphdb/v2alpha1": true,
+	"graphdb/v3alpha1": true,
 }
 
 // CheckCompatibility inspects graph_meta.graph_schema_version and

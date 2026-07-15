@@ -8,6 +8,7 @@ import (
 
 	graphErrors "github.com/Obedience-Corp/camp-graph/internal/errors"
 	"github.com/Obedience-Corp/camp-graph/internal/graph"
+	"github.com/Obedience-Corp/camp-graph/internal/ledger"
 	"github.com/Obedience-Corp/camp-graph/internal/scanner"
 	"github.com/Obedience-Corp/camp-graph/internal/search"
 )
@@ -33,6 +34,9 @@ type RefreshReport struct {
 	DurationMs        int64
 	StaleBefore       bool
 	StaleAfter        bool
+	// Ledger is populated when a rebuild path ingested campaign ledger
+	// events (D008). Nil on the no-op fast path.
+	Ledger *ledger.Report
 }
 
 // RefreshRequest captures the inputs a caller supplies to the refresh
@@ -134,6 +138,12 @@ func Refresh(ctx context.Context, req RefreshRequest) (*RefreshReport, error) {
 	if err != nil {
 		return nil, graphErrors.Wrap(err, "scan during refresh")
 	}
+	// D008: re-read the full ledger on every rebuild so causal edges
+	// stay deterministic with the filesystem-derived graph.
+	ledgerReport, err := ledger.Ingest(ctx, req.CampaignRoot, g)
+	if err != nil {
+		return nil, graphErrors.Wrap(err, "ledger ingest during refresh")
+	}
 	scanInv := sc.Inventory()
 	if scanInv == nil {
 		scanInv = inv
@@ -165,6 +175,7 @@ func Refresh(ctx context.Context, req RefreshRequest) (*RefreshReport, error) {
 		DurationMs:        time.Since(start).Milliseconds(),
 		StaleBefore:       staleBefore,
 		StaleAfter:        false,
+		Ledger:            ledgerReport,
 	}, nil
 }
 

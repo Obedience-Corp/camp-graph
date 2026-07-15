@@ -47,6 +47,12 @@ const (
 	// including submodules) as an explicit graph slice anchor. ID is
 	// "repo:<relative-repo-root>" per the implementation contract.
 	NodeRepo NodeType = "repo"
+	// NodeDecision is a ledger-derived decision node (kind decided).
+	// ID is "decision:<event_ulid>" (D008).
+	NodeDecision NodeType = "decision"
+	// NodeAction is a ledger-derived action node (kind evidence_attached),
+	// grouped by the ledger action id. ID is "action:<action_ulid>" (D008).
+	NodeAction NodeType = "action"
 )
 
 // Scope-related metadata keys recorded on Node.Metadata for folder and
@@ -87,6 +93,10 @@ const (
 	EdgeCalls        EdgeType = "calls"
 	EdgeImports      EdgeType = "imports"
 	EdgeModifies     EdgeType = "modifies"
+	// Causal/temporal edges emitted from the campaign ledger (D008).
+	EdgePromotedTo EdgeType = "promoted_to"
+	EdgeProduced   EdgeType = "produced"
+	EdgeBecauseOf  EdgeType = "because_of"
 )
 
 // ConfidenceSource indicates how an edge was discovered.
@@ -96,6 +106,10 @@ const (
 	SourceExplicit   ConfidenceSource = "explicit"
 	SourceStructural ConfidenceSource = "structural"
 	SourceInferred   ConfidenceSource = "inferred"
+	// SourceLedger marks edges derived from campaign ledger events.
+	// Used for live command/explicit emission; reconciled/backfill
+	// events instead use SourceInferred with confidence < 1.0 (D008).
+	SourceLedger ConfidenceSource = "ledger"
 )
 
 // Node represents a single campaign artifact in the knowledge graph.
@@ -163,6 +177,10 @@ func (t NodeType) String() string {
 		return "attachment"
 	case NodeRepo:
 		return "repo"
+	case NodeDecision:
+		return "decision"
+	case NodeAction:
+		return "action"
 	default:
 		return string(t)
 	}
@@ -207,6 +225,12 @@ func (t EdgeType) String() string {
 		return "imports"
 	case EdgeModifies:
 		return "modifies"
+	case EdgePromotedTo:
+		return "promoted_to"
+	case EdgeProduced:
+		return "produced"
+	case EdgeBecauseOf:
+		return "because_of"
 	default:
 		return string(t)
 	}

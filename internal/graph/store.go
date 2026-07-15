@@ -101,7 +101,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_docs_fts USING fts5(
 // regenerates it from the campaign filesystem — so destroying it on
 // schema drift is strictly preferable to silently running against a
 // stale column layout.
-const currentSchemaVersion = "graphdb/v2alpha1"
+const currentSchemaVersion = "graphdb/v3alpha1"
 
 // allManagedTables lists every table and virtual table defined in
 // createTablesSQL. DROP order matters: indexes and virtual tables are

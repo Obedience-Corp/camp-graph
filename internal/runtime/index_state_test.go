@@ -77,7 +77,7 @@ func TestStatus_RoundTripFromMeta(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	_ = store.SetMeta(ctx, "graph_schema_version", "graphdb/v2alpha1")
+	_ = store.SetMeta(ctx, "graph_schema_version", "graphdb/v3alpha1")
 	_ = store.SetMeta(ctx, "plugin_version", "dev")
 	_ = store.SetMeta(ctx, "built_at", "2026-04-17T00:00:00Z")
 	_ = store.SetMeta(ctx, "last_refresh_at", "2026-04-17T00:05:00Z")
@@ -94,7 +94,7 @@ func TestStatus_RoundTripFromMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load status: %v", err)
 	}
-	if s.GraphSchemaVersion != "graphdb/v2alpha1" {
+	if s.GraphSchemaVersion != "graphdb/v3alpha1" {
 		t.Errorf("schema: got %q", s.GraphSchemaVersion)
 	}
 	if s.LastRefreshMode != "refresh" {
