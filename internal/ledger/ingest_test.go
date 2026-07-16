@@ -204,7 +204,7 @@ func TestIngest_WorkitemNormalization(t *testing.T) {
 				"workitem": "WI-abc123", // ref form
 			},
 			"actor":   map[string]any{"type": "human"},
-			"payload": map[string]any{"from": "a", "to": "b", "target": "active"},
+			"payload": map[string]any{"from": "pending", "to": "active", "target": "workitem"},
 			"source":  "command",
 		},
 		{
@@ -215,7 +215,7 @@ func TestIngest_WorkitemNormalization(t *testing.T) {
 				"workitem": "demo-workitem", // slug form
 			},
 			"actor":   map[string]any{"type": "human"},
-			"payload": map[string]any{"from": "b", "to": "c", "target": "completed"},
+			"payload": map[string]any{"from": "active", "to": "completed", "target": "workitem"},
 			"source":  "command",
 		},
 	})
@@ -229,6 +229,55 @@ func TestIngest_WorkitemNormalization(t *testing.T) {
 	}
 	if n.Status != "completed" {
 		t.Fatalf("status after normalized transitions: got %q want completed", n.Status)
+	}
+}
+
+// TestIngest_TransitionStatusFromDestinationNotTarget guards the fest ledger
+// contract: a transition carries the artifact kind or action in "target"
+// ("festival", "reset", "blocked") and the real destination status in "to".
+// Reading "target" as the status recorded every transitioned festival as
+// status "festival" and every reset task as "reset". Each payload below is the
+// exact shape a fest producer emits (status/atomic.go, progress/manager.go).
+func TestIngest_TransitionStatusFromDestinationNotTarget(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload map[string]any
+		want    string
+	}{
+		{"festival status change", map[string]any{"from": "active", "to": "completed", "target": "festival"}, "completed"},
+		{"festival to dungeon alias", map[string]any{"from": "active", "to": "dungeon/completed", "target": "festival"}, "completed"},
+		{"task reset", map[string]any{"to": "pending", "target": "reset"}, "pending"},
+		{"task blocked", map[string]any{"from": "pending", "to": "blocked", "target": "blocked"}, "blocked"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			seedCampaign(t, root)
+			g := baseGraph() // festival:demo-fest-DF0001 seeded with Status "active"
+
+			writeEvents(t, root, []map[string]any{
+				{
+					"v": 1, "id": "tr-1", "ts": "2026-07-12T12:00:00Z",
+					"kind":    "transitioned",
+					"scope":   map[string]any{"campaign": "camp-1", "festival": "demo-fest-DF0001"},
+					"actor":   map[string]any{"type": "human"},
+					"payload": tc.payload,
+					"source":  "command",
+				},
+			})
+
+			if _, err := Ingest(context.Background(), root, g); err != nil {
+				t.Fatal(err)
+			}
+			n := g.Node("festival:demo-fest-DF0001")
+			if n == nil {
+				t.Fatal("festival node missing")
+			}
+			if n.Status != tc.want {
+				t.Fatalf("status: got %q want %q (target %q must not be read as status)",
+					n.Status, tc.want, tc.payload["target"])
+			}
+		})
 	}
 }
 
