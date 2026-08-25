@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Obedience-Corp/obey-shared/buildutil"
+	buildutil "github.com/Obedience-Corp/build-util"
 )
 
 func main() {

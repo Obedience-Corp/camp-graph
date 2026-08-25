@@ -6,10 +6,12 @@ github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c h1:udKWzYgxTojEK
 github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
+github.com/Obedience-Corp/build-util v0.1.0 h1:I+R+HWEMTdi27ZOVtfMsxYzno7hx/t/cPc6D3VyNrdQ=
+github.com/Obedience-Corp/build-util v0.1.0/go.mod h1:DEzIemlbEpZYOmEG1xnOWinLrsKxC/0gG8JFNm6M438=
 github.com/Obedience-Corp/camp v0.3.0-rc.2 h1:a0GCh/E69AlvDmsE14zcXmcB31rGtq3Zf7IQjmuPJuI=
 github.com/Obedience-Corp/camp v0.3.0-rc.2/go.mod h1:0K3f98p4IDeC1IFZoX0g7k3aGr1LAy5rF2SYA6iwMxc=
-github.com/Obedience-Corp/obey-shared v0.4.4 h1:BLsOvnvZ0ViHLFVOQ5i1zC3+sa+XLMXhsX67ueMTGpY=
-github.com/Obedience-Corp/obey-shared v0.4.4/go.mod h1:X7xXZJ/S8Ek7s6dsihrnpFLnBykOkv2dQnHv+sRHx/Q=
+github.com/Obedience-Corp/obey-shared v0.5.0 h1:b+TtSUiloBhQ70aufbfKlvFoOUuO6DzMVd1/LIJEXLU=
+github.com/Obedience-Corp/obey-shared v0.5.0/go.mod h1:DX1dmJr5VYGYgGjzZQyHqsoX1DkOYNureTT1j5tGSb8=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
 github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
 github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=

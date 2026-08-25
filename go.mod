@@ -3,8 +3,9 @@ module github.com/Obedience-Corp/camp-graph
 go 1.25.6
 
 require (
+	github.com/Obedience-Corp/build-util v0.1.0
 	github.com/Obedience-Corp/camp v0.3.0-rc.2
-	github.com/Obedience-Corp/obey-shared v0.4.4
+	github.com/Obedience-Corp/obey-shared v0.5.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
