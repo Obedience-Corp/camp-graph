@@ -1,5 +1,5 @@
 #!/usr/bin/env just --justfile
-# camp-graph - Knowledge graph visualization for campaigns
+# camp-graph - Knowledge graph visualization for camps
 
 set dotenv-load := true
 
@@ -21,7 +21,7 @@ mod release '.justfiles/release.just'
 
 [private]
 default:
-    @echo "camp-graph - Knowledge Graph Visualization for Campaigns"
+    @echo "camp-graph - Knowledge Graph Visualization for Camps"
     @echo ""
     @just --list --unsorted
 

@@ -29,7 +29,7 @@ var (
 func newQueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query <term>",
-		Short: "Search across all workspace content (FTS5-backed)",
+		Short: "Search across all camp content (FTS5-backed)",
 		Args:  cobra.MinimumNArgs(1),
 		RunE:  runQuery,
 	}

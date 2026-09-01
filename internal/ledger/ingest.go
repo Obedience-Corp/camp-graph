@@ -39,7 +39,7 @@ func Ingest(ctx context.Context, campaignRoot string, g *graph.Graph) (*Report, 
 		return nil, graphErrors.New("ledger ingest: nil graph")
 	}
 	if campaignRoot == "" {
-		return nil, graphErrors.New("ledger ingest: empty campaign root")
+		return nil, graphErrors.New("ledger ingest: empty camp root")
 	}
 
 	reader, err := ledgerkit.NewReader(campaignRoot)
@@ -48,7 +48,7 @@ func Ingest(ctx context.Context, campaignRoot string, g *graph.Graph) (*Report, 
 	}
 	events, readReport, err := reader.Read(ctx)
 	if err != nil {
-		return nil, graphErrors.Wrap(err, "read campaign ledger")
+		return nil, graphErrors.Wrap(err, "read camp ledger")
 	}
 
 	rep := &Report{EventsRead: len(events)}

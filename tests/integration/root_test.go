@@ -42,8 +42,8 @@ func TestCampRootInvalidEnvVarOutsideCampaign(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for invalid CAMP_ROOT, got output: %s", output)
 	}
-	if !strings.Contains(output, "determining campaign root") {
-		t.Fatalf("expected campaign root error, got: %s", output)
+	if !strings.Contains(output, "determining camp root") {
+		t.Fatalf("expected camp root error, got: %s", output)
 	}
 }
 

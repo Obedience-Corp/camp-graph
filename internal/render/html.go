@@ -41,7 +41,7 @@ func RenderHTML(ctx context.Context, w io.Writer, g *graph.Graph) error {
 	}
 
 	data := htmlData{
-		Title:   "Campaign Graph",
+		Title:   "Camp Graph",
 		Summary: fmt.Sprintf("%s, %s", pluralize(g.NodeCount(), "node"), pluralize(g.EdgeCount(), "edge")),
 		Legend:  buildLegend(g),
 		SVG:     template.HTML(stripSVGProlog(svgBuf.String())), //nolint:gosec // go-graphviz output, not user-controlled HTML
