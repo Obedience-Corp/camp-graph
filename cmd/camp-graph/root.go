@@ -21,17 +21,17 @@ type Config struct {
 	// Verbose enables detailed output when true.
 	Verbose bool
 
-	// CampRoot is the resolved campaign root directory for this invocation.
+	// CampRoot is the resolved camp root directory for this invocation.
 	CampRoot string
 }
 
 var rootCmd = &cobra.Command{
 	Use:   "camp-graph",
-	Short: "Knowledge graph visualization for campaigns",
-	Long: `camp-graph builds and visualizes knowledge graphs from campaign artifacts.
+	Short: "Knowledge graph visualization for camps",
+	Long: `camp-graph builds and visualizes knowledge graphs from camp artifacts.
 
 It discovers relationships between projects, festivals, intents, design docs,
-chains, and code to provide a unified view of your campaign.
+chains, and code to provide a unified view of your camp.
 
 When installed on PATH, camp discovers it automatically:
   camp graph build
@@ -49,7 +49,7 @@ func init() {
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		root, err := camputil.FindCampaignRoot(cmd.Context(), "")
 		if err != nil {
-			return graphErrors.Wrap(err, "determining campaign root")
+			return graphErrors.Wrap(err, "determining camp root")
 		}
 		cfg.CampRoot = root
 		cmd.SetContext(context.WithValue(cmd.Context(), configKey{}, cfg))
@@ -67,7 +67,7 @@ func init() {
 	renderCmd.Flags().StringVar(&renderDB, "db", "", "path to graph database")
 	renderCmd.Flags().StringVarP(&renderFormat, "format", "f", "dot", "output format: dot, svg, png, json, html")
 	renderCmd.Flags().BoolVar(&renderOpen, "open", false, "open rendered file after writing")
-	renderCmd.Flags().BoolVar(&renderNoSave, "no-save", false, "skip auto-save to .campaign/graphs/")
+	renderCmd.Flags().BoolVar(&renderNoSave, "no-save", false, "skip auto-save under .campaign/graphs/")
 	renderCmd.Flags().StringVar(&renderScope, "scope", "", "render only the nodes inside this scope path")
 	renderCmd.Flags().StringVar(&renderMode, "mode", "hybrid", "relation mode: structural|explicit|semantic|hybrid")
 	renderCmd.Flags().BoolVar(&renderTracked, "tracked", false, "only tracked files")

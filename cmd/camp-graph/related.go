@@ -24,15 +24,15 @@ var (
 func newRelatedCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "related",
-		Short: "Find items related to a campaign-relative path",
+		Short: "Find items related to a camp-relative path",
 		Long: `Return graph-related/v1alpha1 items relevant to --path.
 
-The --path argument is campaign-relative. When called by camp workitem
+The --path argument is camp-relative. When called by camp workitem
 integrations, callers should pass primary_doc when non-empty and fall
 back to relative_path otherwise.`,
 		RunE: runRelated,
 	}
-	cmd.Flags().StringVar(&relatedPath, "path", "", "campaign-relative path to the source document")
+	cmd.Flags().StringVar(&relatedPath, "path", "", "camp-relative path to the source document")
 	cmd.Flags().StringVar(&relatedMode, "mode", "hybrid", "relation mode: structural|explicit|semantic|hybrid")
 	cmd.Flags().IntVar(&relatedLimit, "limit", 10, "maximum number of items to return")
 	cmd.Flags().StringVar(&relatedDB, "db", "", "override graph database path")

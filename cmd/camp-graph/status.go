@@ -73,7 +73,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 		return enc.Encode(payload)
 	}
 
-	fmt.Fprintf(os.Stdout, "campaign=%s db=%s schema=%s plugin=%s nodes=%d edges=%d indexed=%d stale=%v search=%v\n",
+	fmt.Fprintf(os.Stdout, "camp=%s db=%s schema=%s plugin=%s nodes=%d edges=%d indexed=%d stale=%v search=%v\n",
 		status.CampaignRoot, status.DBPath,
 		status.GraphSchemaVersion, status.PluginVersion,
 		status.Nodes, status.Edges, status.IndexedFiles,

@@ -142,11 +142,11 @@ func TestRenderHTMLFormat(t *testing.T) {
 		"</html>",
 		"<svg",
 		"</svg>",
-		"project:test",   // node ID appears unescaped in SVG <title>
-		"festival:test",  // second node also present
-		"2 node",         // summary reflects node count
-		"1 edge",         // summary reflects edge count
-		"Campaign Graph", // page title
+		"project:test",  // node ID appears unescaped in SVG <title>
+		"festival:test", // second node also present
+		"2 node",        // summary reflects node count
+		"1 edge",        // summary reflects edge count
+		"Camp Graph",    // page title
 	}
 	for _, want := range requires {
 		if !strings.Contains(out, want) {

@@ -22,15 +22,15 @@ var outputPath string
 
 var buildCmd = &cobra.Command{
 	Use:   "build",
-	Short: "Build knowledge graph from campaign filesystem",
-	Long:  "Scan the campaign directory and build a knowledge graph of all artifacts and their relationships.",
+	Short: "Build knowledge graph from camp filesystem",
+	Long:  "Scan the camp workspace and build a knowledge graph of all artifacts and their relationships.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg := ctx.Value(configKey{}).(*Config)
 		root := cfg.CampRoot
 
 		if _, err := os.Stat(filepath.Join(root, "projects")); os.IsNotExist(err) {
-			return graphErrors.New(root + " does not appear to be a campaign (no projects/ directory)")
+			return graphErrors.New(root + " does not appear to be a camp (no projects/ directory)")
 		}
 
 		fmt.Printf("Building graph from: %s\n\n", root)

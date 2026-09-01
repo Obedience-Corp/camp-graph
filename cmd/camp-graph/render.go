@@ -30,7 +30,7 @@ var (
 var renderCmd = &cobra.Command{
 	Use:   "render",
 	Short: "Render graph as DOT, SVG, PNG, JSON, or HTML",
-	Long:  "Output the knowledge graph in DOT, SVG, PNG, JSON, or HTML format.\nBy default, output is also saved to .campaign/graphs/ for easy access.",
+	Long:  "Output the knowledge graph in DOT, SVG, PNG, JSON, or HTML format.\nBy default, output is also saved under the camp metadata directory, .campaign/graphs/.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg := ctx.Value(configKey{}).(*Config)
